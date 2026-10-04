@@ -1,0 +1,353 @@
+warning: in the working copy of 'frontend/src/components/PageShell.jsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'frontend/src/components/Panel.jsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'frontend/src/components/StatCard.jsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'frontend/src/index.css', LF will be replaced by CRLF the next time Git touches it
+[1mdiff --git a/.gitignore b/.gitignore[m
+[1mindex 943ab33..0a30ca5 100644[m
+[1m--- a/.gitignore[m
+[1m+++ b/.gitignore[m
+[36m@@ -9,3 +9,19 @@[m [m__pycache__/[m
+ *.py[cod][m
+ backend/**/__pycache__/[m
+ ml_models/[m
+[32m+[m[32m.env*[m
+[32m+[m[32m!.env.example[m
+[32m+[m[32mdist/[m
+[32m+[m[32mbuild/[m
+[32m+[m[32mvenv/[m
+[32m+[m[32m.venv/[m
+[32m+[m[32m*.log[m
+[32m+[m[32m*.pem[m
+[32m+[m[32m*.key[m
+[32m+[m[32m*.pfx[m
+[32m+[m[32m*.db[m
+[32m+[m[32m*.sqlite[m
+[32m+[m[32m*.sqlite3[m
+[32m+[m[32mHockeyApp*[m
+[32m+[m[32m.idea/[m
+[32m+[m[32m*.tmTheme[m
+[1mdiff --git a/README.md b/README.md[m
+[1mindex 27e4535..fb25bab 100644[m
+[1m--- a/README.md[m
+[1m+++ b/README.md[m
+[36m@@ -1,41 +1,127 @@[m
+[31m-<<<<<<< HEAD[m
+[31m-# AI SOC Firewall (Capstone)[m
+[31m-[m
+[31m-## Stack[m
+[31m-- FastAPI backend[m
+[31m-- MongoDB[m
+[31m-- ML (RandomForest + IsolationForest)[m
+[31m-- React + Tailwind frontend[m
+[31m-- WebSocket real-time alerts[m
+[31m-[m
+[31m-## Run (local)[m
+[31m-1. Start MongoDB[m
+[31m-2. Backend:[m
+[31m-   ```bash[m
+[31m-   cd backend[m
+[31m-   .\.venv\Scripts\Activate.ps1[m
+[31m-   python -m database.seed[m
+[31m-   python -m uvicorn main:app --reload --host 127.0.0.1 --port 8000[m
+[31m-   ```[m
+[31m-3. Frontend:[m
+[31m-   ```bash[m
+[31m-   cd frontend[m
+[31m-   npm install[m
+[31m-   npm run dev[m
+[31m-   ```[m
+[31m-[m
+[31m-## Default Users[m
+[31m-- admin@soc.local / Admin@123[m
+[31m-- analyst@soc.local / Analyst@123[m
+[31m-[m
+[31m-## Key APIs[m
+[31m-- `/api/v1/auth/login`[m
+[31m-- `/api/v1/attacks`[m
+[31m-- `/api/v1/ingestion/file`[m
+[31m-- `/api/v1/ml/predict`[m
+[31m-- `/api/v1/geo/lookup`[m
+[31m-- `/api/v1/siem/export`[m
+[31m-- `/ws/attacks`[m
+[31m-=======[m
+[31m-# AI-Based-SOC-with-Automated-Firewall-Response[m
+[31m->>>>>>> a580a152b22fc4320f39c2d468bead83c6c098a8[m
+[32m+[m[32m# AI-Based SOC with Automated Firewall Response[m
+[32m+[m
+[32m+[m[32m## Project Overview[m
+[32m+[m[32mAI-Based SOC with Automated Firewall Response is a Security Operations Center platform that detects, analyzes, and automates responses to network attacks in real-time. The system combines attack detection, threat analysis using AI/ML, risk scoring, MITRE ATT&CK mapping, and automated firewall actions to provide comprehensive security monitoring and response capabilities.[m
+[32m+[m
+[32m+[m[32m## Problem Statement[m
+[32m+[m[32mModern SOC teams face challenges in real-time attack detection, analysis, and automated response. Manual processes are slow, inconsistent, and prone to error. There is a need for an integrated system that can automatically detect attacks, assess risk, provide AI-powered threat analysis, and take automated mitigation actions while maintaining visibility across all attack vectors.[m
+[32m+[m
+[32m+[m[32m## Objectives[m
+[32m+[m[32m- Real-time attack detection and monitoring[m
+[32m+[m[32m- AI-powered threat analysis and risk scoring[m
+[32m+[m[32m- Automated firewall response based on confirmed threats[m
+[32m+[m[32m- Visual attack mapping and dashboard analytics[m
+[32m+[m[32m- MITRE ATT&CK classification for attack categorization[m
+[32m+[m[32m- WebSocket-powered real-time updates[m
+[32m+[m[32m- Private IP address safety handling[m
+[32m+[m[32m- Comprehensive KPI tracking and reporting[m
+[32m+[m
+[32m+[m[32m## Key Features[m
+[32m+[m[32m### Live Attack Map[m
+[32m+[m[32m- Real-time attack visualization using react-simple-maps[m
+[32m+[m[32m- Safe private IP handling (127.x, 10.x, 172.16-31.x, 192.168.x, localhost)[m
+[32m+[m[32m- No fake coordinates or fabricated geographic data[m
+[32m+[m[32m- Updates on WebSocket new_attack events[m
+[32m+[m[32m- Geographic info from backend threat intelligence[m
+[32m+[m[32m### AI Threat Analysis[m
+[32m+[m[32m- Loading ("Analyzing threat..."), error ("Threat analysis unavailable"), and empty ("No attack selected") states[m
+[32m+[m[32m- Real backend data: attack type, severity, risk score, source IP, analysis, recommended response, confidence[m
+[32m+[m[32m- No fake AI text or hardcoded responses[m
+[32m+[m[32m- Safe handling of null, empty, and malformed responses[m
+[32m+[m[32m### Firewall Response Integration[m
+[32m+[m[32m- Confirmed status display (Blocked/Allowed/Pending/Failed)[m
+[32m+[m[32m- No false "blocked" claims (detection != mitigation)[m
+[32m+[m[32m- Backend-integrated firewall API[m
+[32m+[m[32m- IP validation before any action[m
+[32m+[m[32m- Audit-ready rule management[m
+[32m+[m[32m### Dashboard KPIs[m
+[32m+[m[32m- Total attacks, blocked IPs, active incidents, assets monitored, threat intel matches, automated responses[m
+[32m+[m[32m- Real-time WebSocket updates[m
+[32m+[m[32m- Polling fallback when WebSocket unavailable[m
+[32m+[m[32m- Empty and error state handling[m
+[32m+[m[32m### Attack Type Distribution[m
+[32m+[m[32m- Dynamic pie chart with real backend data[m
+[32m+[m[32m- Attack type normalization (DoS, DOS, sql, SQL injection, etc.)[m
+[32m+[m[32m- Percentage calculations with zero-value category support[m
+[32m+[m[32m### Severity Distribution[m
+[32m+[m[32m- critical, high, medium, low handling[m
+[32m+[m[32m- Count + percentage display[m
+[32m+[m[32m- Zero-value categories supported[m
+[32m+[m[32m- Capitalization consistency[m
+[32m+[m[32m### Top Attacking IPs[m
+[32m+[m[32m- Grouping by source_ip/src_ip/source[m
+[32m+[m[32m- Event count, highest severity, common attack type[m
+[32m+[m[32m- Average risk score, sorting, top 5 behavior[m
+[32m+[m[32m- Missing IP graceful handling[m
+[32m+[m[32m### Attack Feed[m
+[32m+[m[32m- Real-time new attack notifications[m
+[32m+[m[32m- Deduplication prevention[m
+[32m+[m[32m- WebSocket and polling updates[m
+[32m+[m[32m### WebSocket Real-Time Updates[m
+[32m+[m[32m- connectAttackSocket with generation tracking[m
+[32m+[m[32m- Duplicate attack prevention[m
+[32m+[m[32m- Auto-reconnect on failure[m
+[32m+[m[32m- Polling fallback retention[m
+[32m+[m[32m### MITRE ATT&CK Mapping[m
+[32m+[m[32m- Automatic tactic/technique mapping via MitreService[m
+[32m+[m[32m- Integrated with attack creation flow[m
+[32m+[m[32m### Risk Scoring[m
+[32m+[m[32m- ML model-based risk scores (not hardcoded)[m
+[32m+[m[32m- Consistent across database, API, WebSocket, frontend, AI analysis[m
+[32m+[m[32m- Backend source of truth[m
+[32m+[m[32m### Attack Simulation[m
+[32m+[m[32m- Controlled DoS attack simulation via frontend[m
+[32m+[m[32m- Backend processing and record generation[m
+[32m+[m[32m- Severity and risk_score assignment[m
+[32m+[m[32m- No external system attacks[m
+[32m+[m[32m## API Documentation[m
+[32m+[m
+[32m+[m[32m### Attacks[m
+[32m+[m[32m- **GET /api/v1/attacks** - List attacks (limit parameter supported)[m
+[32m+[m[32m  - Requires: admin or analyst role[m
+[32m+[m[32m  - Parameters: `limit` (default: 100)[m
+[32m+[m[41m  [m
+[32m+[m[32m- **POST /api/v1/attacks** - Create new attack record[m
+[32m+[m[32m  - Requires: admin or analyst role[m
+[32m+[m[32m  - Payload: source_ip, destination_ip, attack_type, severity, timestamp, raw_message, status_code, payload[m
+[32m+[m
+[32m+[m[32m### Firewall[m
+[32m+[m[32m- **POST /api/v1/firewall/block** - Block IP address[m
+[32m+[m[32m  - Requires: admin or analyst role[m
+[32m+[m[32m  - Payload: ip_address, reason[m
+[32m+[m[32m  - Validation: Server-side IP address parsing with ipaddress.ip_address()[m
+[32m+[m[41m  [m
+[32m+[m[32m- **POST /api/v1/firewall/unblock** - Unblock IP address[m
+[32m+[m[32m  - Requires: admin or analyst role[m
+[32m+[m[32m  - Payload: ip_address, reason[m
+[32m+[m
+[32m+[m[32m### Threat Intelligence[m
+[32m+[m[32m- **GET /api/v1/threat-intel/check?ip=X.X.X.X** - Check IP reputation[m
+[32m+[m[32m  - Requires: admin or analyst role[m
+[32m+[m[32m  - Parameters: ip (required)[m
+[32m+[m[41m  [m
+[32m+[m[32m- **GET /api/v1/geo/lookup?ip=X.X.X.X** - Geo IP lookup[m
+[32m+[m[32m  - Requires: admin or analyst role[m
+[32m+[m[32m  - Parameters: ip (required)[m
+[32m+[m
+[32m+[m[32m### WebSocket[m
+[32m+[m[32m- **ws://127.0.0.1:8001/ws/attacks** - Real-time attack events[m
+[32m+[m[32m  - Broadcasts new_attack events with attack data[m
+[32m+[m[32m  - Generation tracking prevents duplicate processing[m
+[32m+[m[32m  - Automatic retry with exponential backoff[m
+[32m+[m
+[32m+[m[32m### Authentication[m
+[32m+[m[32m- **POST /api/v1/auth/login** - User login (public endpoint)[m
+[32m+[m[32m- **GET /api/v1/auth/me** - Get current user profile (Bearer token required)[m
+[32m+[m
+[32m+[m[32m### Health[m
+[32m+[m[32m- **GET /health** - Backend health check (public endpoint)[m
+[32m+[m
+[32m+[m[32m### Hunting/ML[m
+[32m+[m[32m- **POST /api/v1/hunting/search** - Hunt attacks by criteria[m
+[32m+[m[32m  - Requires: admin or analyst role[m
+[32m+[m[32m  - Payload: source_ip, attack_type, severity[m
+[32m+[m
+[32m+[m[32m### Roles[m
+[32m+[m[32m- admin - Full access to all endpoints[m
+[32m+[m[32m- analyst - Access to attack, firewall, threat-intel, and hunting endpoints[m
+\ No newline at end of file[m
+[1mdiff --git a/backend/.env b/backend/.env[m
+[1mindex c073016..43bb8c6 100644[m
+[1m--- a/backend/.env[m
+[1m+++ b/backend/.env[m
+[36m@@ -1,3 +1,3 @@[m
+[31m-MONGODB_URI=mongodb://127.0.0.1:27017[m
+[31m-MONGODB_DB=ai_soc_firewall[m
+[31m-JWT_SECRET=change-this-secret-in-production[m
+\ No newline at end of file[m
+[32m+[m[32mSECRET_KEY=a-very-secret-key-at-least-32-chars-long!![m
+[32m+[m[32mDATABASE_URL=sqlite:///C:/Users/abhishek/Downloads/ai-based soc/ai_soc.db[m
+[32m+[m[32mJWT_SECRET=a-very-secret-key-at-least-32-chars-long!![m
+[1mdiff --git a/backend/app/core/config.py b/backend/app/core/config.py[m
+[1mindex c2cf7c6..6f634c4 100644[m
+[1m--- a/backend/app/core/config.py[m
+[1m+++ b/backend/app/core/config.py[m
+[36m@@ -28,7 +28,7 @@[m [mclass Settings(BaseSettings):[m
+     DATABASE_URL: str = ""[m
+     REDIS_URL: str = ""[m
+ [m
+[31m-    CORS_ORIGINS: list[str] = Field(default_factory=lambda: ["http://localhost:3000"])[m
+[32m+[m[32m    CORS_ORIGINS: list[str] = Field(default_factory=lambda: ["http://127.0.0.1:5173"])[m
+ [m
+     RATE_LIMIT_DEFAULT: str = "120/minute"[m
+     RATE_LIMIT_LOGIN: str = "5/minute"[m
+[1mdiff --git a/backend/app/main.py b/backend/app/main.py[m
+[1mindex 1605af7..ffc2d48 100644[m
+[1m--- a/backend/app/main.py[m
+[1m+++ b/backend/app/main.py[m
+[36m@@ -1,978 +1,69 @@[m
+[31m-import math[m
+[31m-import os[m
+[31m-import uuid[m
+[31m-from collections import defaultdict, deque[m
+[31m-from collections.abc import Awaitable, Callable[m
+[31m-from dataclasses import dataclass[m
+[31m-from datetime import datetime, timedelta, timezone[m
+[31m-from pathlib import Path[m
+[31m-from typing import Any, TypeVar, cast[m
+[31m-[m
+[31m-from backend.core.security import ([m
+[31m-    create_access_token,[m
+[31m-    decode_access_token,[m
+[31m-    hash_password,[m
+[31m-    verify_password,[m
+[31m-)[m
+[31m-from backend.database.mongodb import close_mongo, connect_mongo[m
+[31m-from backend.services.db_service import DBService[m
+[31m-from fastapi import ([m
+[31m-    FastAPI,[m
+[31m-    Header,[m
+[31m-    HTTPException,[m
+[31m-    Query,[m
+[31m-    Request,[m
+[31m-    WebSocket,[m
+[31m-    WebSocketDisconnect,[m
+[31m-    status,[m
+[31m-)[m
+[31m-from fastapi.exceptions import RequestValidationError[m
+[32m+[m[32mfrom fastapi import FastAPI[m
+ from fastapi.middleware.cors import CORSMiddleware[m
+[31m-from fastapi.responses import JSONResponse, Response[m
+[31m-from fastapi.staticfiles import StaticFiles[m
+[31m-from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_latest[m
+[31m-from pydantic import BaseModel, Field[m
+[31m-from reportlab.lib.pagesizes import A4[m
+[31m-from reportlab.pdfgen import canvas[m
+[31m-from slowapi import Limiter, _rate_limit_exceeded_handler[m
+[31m-from slowapi.errors import RateLimitExceeded[m
+[31m-from slowapi.util import get_remote_address[m
+[31m-from starlette.middleware.base import BaseHTTPMiddleware[m
+ [m
+[31m-# =========================================================[m
+[31m-# Config (env-driven, production-safe defaults)[m
+[31m-# =========================================================[m
+[31m-APP_NAME = os.getenv("APP_NAME", "AI SOC Firewall")[m
+[31m-APP_VERSION = os.getenv("APP_VERSION", "1.1.0")[m
+[31m-ENV = os.getenv("ENV", "dev").lower()  # dev|test|prod[m
+[31m-DOCS_ENABLED = os.getenv("DOCS_ENABLED", "true").lower() == "true"[m
+[31m-[m
+[31m-SECRET_KEY = os.getenv("SECRET_KEY", "")[m
+[31m-if ENV == "prod" and len(SECRET_KEY) < 32:[m
+[31m-    raise RuntimeError("In production, SECRET_KEY must be set and >= 32 chars.")[m
+[31m-[m
+[31m-CORS_ORIGINS_RAW = os.getenv([m
+[31m-    "CORS_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000"[m
+[31m-)[m
+[31m-CORS_ORIGINS = [x.strip() for x in CORS_ORIGINS_RAW.split(",") if x.strip()][m
+[31m-if ENV == "dev" and "*" not in CORS_ORIGINS:[m
+[31m-    CORS_ORIGINS.append("*")[m
+[31m-[m
+[31m-RATE_LIMIT_DEFAULT = os.getenv("RATE_LIMIT_DEFAULT", "120/minute")[m
+[31m-RATE_LIMIT_LOGIN = os.getenv("RATE_LIMIT_LOGIN", "5/minute")[m
+[31m-[m
+[31m-# =========================================================[m
+[31m-# App init[m
+[31m-# =========================================================[m
+[31m-app = FastAPI([m
+[31m-    title=APP_NAME,[m
+[31m-    version=APP_VERSION,[m
+[31m-    docs_url="/docs" if DOCS_ENABLED else None,[m
+[31m-    redoc_url="/redoc" if DOCS_ENABLED else None,[m
+[31m-    openapi_url="/openapi.json" if DOCS_ENABLED else None,[m
+[31m-)[m
+[32m+[m[32mfrom backend.core.config import settings[m
+[32m+[m[32mfrom backend.database.mongodb import connect_mongo, close_mongo[m
+[32m+[m
+[32m+[m[32mfrom backend.routes.attacks import router as attacks_router[m
+[32m+[m[32mfrom backend.routes.firewall_routes import router as firewall_router[m
+[32m+[m[32mfrom backend.routes.hunting import router as hunting_router[m
+[32m+[m[32mfrom backend.routes.geo_routes import router as geo_router[m
+[32m+[m[32mfrom backend.routes.ingestion import router as ingestion_router[m
+[32m+[m[32mfrom backend.routes.ml_routes import router as ml_router[m
+[32m+[m[32mfrom backend.routes.reports import router as reports_router[m
+[32m+[m[32mfrom backend.routes.siem_routes import router as siem_router[m
+[32m+[m[32mfrom backend.routes.ws_routes import router as ws_router[m
+[32m+[m[32mfrom backend.routes.db_admin import router as db_admin_router[m
+[32m+[m[32mfrom backend.routes.auth import router as auth_router[m
+[32m+[m[32mfrom backend.routes.dashboard_routes import router as dashboard_router[m
+[32m+[m[32mfrom backend.routes.incidents_routes import router as incidents_router[m
+[32m+[m[32mfrom backend.routes.threat_intel_routes import router as threat_intel_router[m
+[32m+[m[32mfrom backend.routes.system_health_routes import router as system_health_router[m
+[32m+[m[32mfrom backend.routes.simulations_routes import router as simulations_router[m
+[32m+[m[32mfrom backend.routes.audit_events_routes import router as audit_events_router[m
+[32m+[m
+[32m+[m[32mapp = FastAPI()[m
+ [m
+ [m
+ @app.on_event("startup")[m
+[31m-def startup_event() -> None:[m
+[31m-    try:[m
+[31m-        connect_mongo()[m
+[31m-    except Exception:[m
+[31m-        # Tests/CI can continue with DBService in-memory fallback.[m
+[31m-        pass[m
+[31m-[m
+[31m-    DBService.upsert_seed_user([m
+[31m-        {[m
+[31m-            "id": "seed-admin-1",[m
+[31m-            "email": "admin@soc.local",[m
+[31m-            "full_name": "SOC Admin",[m
+[31m-            "role": "admin",[m
+[31m-            "password_hash": hash_password("Admin@123"),[m
+[31m-            "disabled": False,[m
+[31m-        }[m
+[31m-    )[m
+[32m+[m[32mdef startup_event():[m
+[32m+[m[32m    connect_mongo()[m
+ [m
+ [m
+ @app.on_ev

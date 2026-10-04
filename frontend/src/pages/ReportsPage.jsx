@@ -35,7 +35,7 @@ export default function ReportsPage({ profile, onLogout }) {
       const { data } = await generateReportApi(selectedIncident);
       setStatus(`Report generated: ${data?.report_name || data?.message || "success"}`);
       if (data?.report_path) {
-        window.open(`http://127.0.0.1:8000/${data.report_path.replace(/^\/+/, "")}`, "_blank");
+        window.open(`http://127.0.0.1:8001/${data.report_path.replace(/^\/+/, "")}`, "_blank");
       }
     } catch (e) {
       const d = e?.response?.data;
@@ -73,7 +73,7 @@ export default function ReportsPage({ profile, onLogout }) {
         <Panel title="Threat Intelligence Feed">
           <ul className="space-y-2 text-sm text-slate-300 mb-4">
             <li>Total incidents: {attacks.length}</li>
-            <li>High risk (>=70): {highRisk.length}</li>
+            <li>High risk (&gt;=70): {highRisk.length}</li>
             <li>Selected incident: {selectedIncident || "None"}</li>
           </ul>
 

@@ -1,0 +1,13 @@
+[1mdiff --git a/backend/requirements.txt b/backend/requirements.txt[m
+[1mindex 9bb3788..a37412f 100644[m
+[1m--- a/backend/requirements.txt[m
+[1m+++ b/backend/requirements.txt[m
+[36m@@ -20,4 +20,5 @@[m [mslowapi==0.1.9[m
+ joblib==1.4.2[m
+ numpy==1.26.4[m
+ pandas==2.2.2[m
+[31m-scikit-learn==1.5.2[m
+\ No newline at end of file[m
+[32m+[m[32mscikit-learn==1.5.2[m
+[32m+[m[32mtypes-reportlab==4.2.2.20230701[m
+\ No newline at end of file[m

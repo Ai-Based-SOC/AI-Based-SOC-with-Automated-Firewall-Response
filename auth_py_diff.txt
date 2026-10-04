@@ -1,0 +1,60 @@
+diff --git a/backend/routes/auth.py b/backend/routes/auth.py
+index e6908b0..384ed2c 100644
+--- a/backend/routes/auth.py
++++ b/backend/routes/auth.py
+@@ -1,9 +1,9 @@
+ from typing import Any
+ 
+-from core.security import create_access_token, get_current_user, verify_password
++from backend.core.security import create_access_token, get_current_user, verify_password
+ from fastapi import APIRouter, Depends, HTTPException, status
+-from models.schemas import LoginRequest, TokenResponse, UserProfile
+-from services.db_service import DBService
++from backend.models.schemas import LoginRequest, SignupRequest, TokenResponse, UserProfile
++from backend.services.db_service import DBService
+ 
+ router = APIRouter(prefix="/auth", tags=["Auth"])
+ 
+@@ -33,6 +33,42 @@ def login(payload: LoginRequest):
+     return {"access_token": token, "token_type": "bearer", "role": str(user["role"])}
+ 
+ 
++@router.post("/signup", response_model=TokenResponse)
++def signup(payload: SignupRequest):
++    # Check for existing user
++    existing = DBService.get_user_by_email(payload.email)
++    if existing:
++        raise HTTPException(status_code=400, detail="Email already registered")
++
++    # Validate password confirmation
++    if payload.password != payload.password_confirm:
++        raise HTTPException(status_code=400, detail="Passwords do not match")
++
++    # Hash password
++    password_hash = hash_password(payload.password)
++
++    # Create user
++    import uuid
++    user_doc = {
++        "id": str(uuid.uuid4()),
++        "email": payload.email.lower().strip(),
++        "full_name": payload.full_name or payload.email.split("@")[0],
++        "role": "user",
++        "password_hash": password_hash,
++        "disabled": False,
++    }
++
++    DBService.create_user(user_doc)
++
++    # Login and token
++    user = DBService.get_user_by_email(payload.email)
++    token = create_access_token(
++        data={"sub": user["id"], "email": user["email"], "role": user["role"]}
++    )
++
++    return {"access_token": token, "token_type": "bearer", "role": user["role"]}
++
++
+ @router.get("/me", response_model=UserProfile)
+ def me(current_user: dict[str, Any] = Depends(get_current_user)):
+     return {

@@ -1,0 +1,49 @@
+diff --git a/frontend/src/services/api.js b/frontend/src/services/api.js
+index 89ae338..cd48f5c 100644
+--- a/frontend/src/services/api.js
++++ b/frontend/src/services/api.js
+@@ -1,6 +1,6 @@
+ import axios from "axios";
+ 
+-const API_BASE = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000/api/v1";
++const API_BASE = import.meta.env.VITE_API_URL || "http://127.0.0.1:8001/api/v1";
+ 
+ const api = axios.create({
+   baseURL: API_BASE,
+@@ -42,6 +42,7 @@ export default api;
+ 
+ // Auth
+ export const loginApi = (email, password) => api.post("/auth/login", { email, password });
++export const signupApi = (email, password, passwordConfirm, fullName) => api.post("/auth/signup", { email, password, passwordConfirm, fullName });
+ export const meApi = () => api.get("/auth/me");
+ 
+ // Health
+@@ -52,22 +53,16 @@ export const getAttacksApi = (limit = 100) => api.get("/attacks", { params: { li
+ export const createAttackApi = (payload) => api.post("/attacks", payload);
+ 
+ // Firewall
+-export const blockIpApi = (ip_address, reason = "SOC analyst action") =>
+-  api.post("/firewall/block", { ip_address, reason });
+-
+-export const unblockIpApi = (ip_address, reason = "SOC analyst action") =>
+-  api.post("/firewall/unblock", { ip_address, reason });
++export const blockIpApi = (ip_address, reason = "SOC analyst action") => api.post("/firewall/block", { ip_address, reason });
++export const unblockIpApi = (ip_address, reason = "SOC analyst action") => api.post("/firewall/unblock", { ip_address, reason });
+ 
+ // Threat intel / geo / hunting
+ export const checkThreatIntelApi = (ip) => api.get("/threat-intel/check", { params: { ip } });
+ export const getGeoIntelApi = (ip) => api.get("/geo/lookup", { params: { ip } });
+-export const huntApi = (source_ip = "", attack_type = "", severity = "") =>
+-  api.post("/hunting/search", { source_ip, attack_type, severity });
++export const huntApi = (source_ip = "", attack_type = "", severity = "") => api.post("/hunting/search", { source_ip, attack_type, severity });
+ 
+ // Reports
+-export const generateReportApi = (incident_id) =>
+-  api.post("/reports/generate", { incident_id });
++export const generateReportApi = (incident_id) => api.post("/reports/generate", { incident_id });
+ 
+ // Ingestion
+-export const ingestLogsApi = (file_path) =>
+-  api.post("/ingestion/file", { file_path });
+\ No newline at end of file
++export const ingestLogsApi = (file_path) => api.post("/ingestion/file", { file_path });
