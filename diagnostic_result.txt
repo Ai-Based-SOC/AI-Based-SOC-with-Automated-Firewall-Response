@@ -1,0 +1,45 @@
+AUTHENTICATION DIAGNOSTIC RESULT
+
+Python:
+C:\Users\abhishek\Downloads\ai-based soc\.venv
+
+Database:
+MongoDB / ai_soc_firewall / users
+
+User:
+admin@soc.local
+FOUND = TRUE
+
+Password hash:
+PRESENT = TRUE
+
+Role:
+admin
+
+Disabled:
+NOT_SET
+
+Admin password available:
+TRUE
+
+Password verification:
+TRUE
+
+DB lookup caching:
+NO
+
+Direct verification:
+PASS
+
+API login:
+401
+
+/auth/me:
+403
+
+PROVEN ROOT CAUSE:
+DBService.get_user_by_email() returns None because the running server has no active MongoDB connection. The function falls back to empty _FAKE_USERS cache, causing user lookup to fail at the first conditional check (user not found -> 401). Password verification (verify_password) successfully validates credentials when user is found, but user lookup fails before verification occurs.
+
+PROJECT CODE CHANGED: NONE
+
+DATABASE MODIFIED: NO

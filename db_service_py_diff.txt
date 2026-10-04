@@ -1,0 +1,75 @@
+diff --git a/backend/services/db_service.py b/backend/services/db_service.py
+index 9d21c65..c0b81bf 100644
+--- a/backend/services/db_service.py
++++ b/backend/services/db_service.py
+@@ -8,6 +8,12 @@ from bson.errors import InvalidId
+ # In-memory fallback (used only when Mongo is unavailable in CI/tests)
+ _FAKE_USERS: dict[str, dict[str, Any]] = {}
+ 
++# IOC in-memory fallback
++_FAKE_IOCS: dict[str, dict[str, Any]] = {}
++
++# Asset in-memory fallback
++_FAKE_ASSETS: dict[str, dict[str, Any]] = {}
++
+ 
+ class DBService:
+     @staticmethod
+@@ -175,13 +181,48 @@ class DBService:
+         return DBService._normalize_many(docs)
+ 
+     @staticmethod
+-    def insert_incident(incident: dict[str, Any]) -> dict[str, Any]:
+-        col = DBService.get_incident_collection()
++    def insert_ioc(ioc: dict[str, Any]) -> dict[str, Any]:
++        col = DBService.get_ioc_collection()
+         now = datetime.now(timezone.utc)
+-        incident = dict(incident)
+-        incident.setdefault("created_at", now)
+-        incident.setdefault("updated_at", now)
+-        res = col.insert_one(incident)
++        ioc = dict(ioc)
++        ioc.setdefault("first_seen", now)
++        ioc.setdefault("last_seen", now)
++        ioc.setdefault("status", "active")
++        res = col.insert_one(ioc)
+         saved = col.find_one({"_id": res.inserted_id})
+         normalized = DBService._normalize_doc(saved)
+-        return normalized or {}
+\ No newline at end of file
++        return normalized or {}
++
++    @staticmethod
++    def insert_audit_event(event: dict[str, Any]) -> dict[str, Any]:
++        """Insert an audit event record."""
++        from datetime import datetime, timezone
++        now = datetime.now(timezone.utc)
++        event = dict(event)
++        event.setdefault("timestamp", now)
++        event.setdefault("created_at", now)
++        # Ensure we have a collection - try to get it, fall back gracefully
++        try:
++            col = DBService.get_audit_collection()
++        except RuntimeError:
++            # Audit events collection may not be configured; store in attacks collection prefix
++            return {"success": False, "detail": "Audit collection not available"}
++        res = col.insert_one(event)
++        saved = col.find_one({"_id": res.inserted_id})
++        normalized = DBService._normalize_doc(saved)
++        return normalized or {}
++
++    @staticmethod
++    def list_iocs(limit: int = 50) -> list[dict[str, Any]]:
++        """List IOC entries."""
++        try:
++            col = DBService.get_ioc_collection()
++            docs = list(col.find({}).sort("first_seen", -1).limit(limit))
++            return DBService._normalize_many(docs)
++        except RuntimeError:
++            return list(_FAKE_IOCS.values())[:limit]
++
++    @staticmethod
++    def get_audit_collection():
++        """Get the audit events collection, raising RuntimeError if not available."""
++        return db()["audit_events"]
+\ No newline at end of file

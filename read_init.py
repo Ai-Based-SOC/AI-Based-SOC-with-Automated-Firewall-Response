@@ -1,0 +1,1 @@
+print(open("backend\\__init__.py").read())

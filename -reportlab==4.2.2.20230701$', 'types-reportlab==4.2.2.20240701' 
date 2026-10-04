@@ -1,0 +1,11 @@
+[1mdiff --git a/backend/requirements.txt b/backend/requirements.txt[m
+[1mindex a37412f..d6454c9 100644[m
+[1m--- a/backend/requirements.txt[m
+[1m+++ b/backend/requirements.txt[m
+[36m@@ -21,4 +21,4 @@[m [mjoblib==1.4.2[m
+ numpy==1.26.4[m
+ pandas==2.2.2[m
+ scikit-learn==1.5.2[m
+[31m-types-reportlab==4.2.2.20230701[m
+\ No newline at end of file[m
+[32m+[m[32mtypes-reportlab==4.2.2.20240701[m

@@ -1,0 +1,10 @@
+diff --git a/backend/services/auth_service.py b/backend/services/auth_service.py
+index 4c02eec..66d878c 100644
+--- a/backend/services/auth_service.py
++++ b/backend/services/auth_service.py
+@@ -1,4 +1,4 @@
+-from core.security import create_access_token, verify_password
++from backend.core.security import create_access_token, verify_password
+ from database.mongodb import get_db
+ from fastapi import HTTPException
+ 
