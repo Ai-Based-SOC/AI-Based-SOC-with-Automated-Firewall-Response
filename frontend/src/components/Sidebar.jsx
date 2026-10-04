@@ -1,50 +1,65 @@
-<aside className="fixed inset-y-0 left-0 z-50 w-[164px] border-r border-cyan-900/70 bg-[#03152b]">
-  <div className="flex h-14 items-center gap-2 border-b border-cyan-900/70 px-3">
-    <div className="flex h-7 w-7 items-center justify-center rounded-md bg-cyan-500 text-sm font-bold text-slate-950">
-      ◇
-    </div>
+import { NavLink } from "react-router-dom";
+import { BarChart3, ShieldAlert, ShieldCheck, FileText, LogOut } from "lucide-react";
 
-    <div>
-      <p className="text-xs font-bold text-white">AI-SOC</p>
-      <p className="text-[7px] text-cyan-300">
-        AI Based Security Operations Center
-      </p>
-    </div>
-  </div>
+const NAV_ITEMS = [
+  { to: "/dashboard", label: "Dashboard", icon: BarChart3 },
+  { to: "/threats", label: "Threat Analysis", icon: ShieldAlert },
+  { to: "/firewall", label: "Firewall", icon: ShieldCheck },
+  { to: "/reports", label: "Reports", icon: FileText },
+];
 
-  <nav className="space-y-1 p-2">
-    {navigation.map((item) => (
-      <a
-        key={item.label}
-        href={item.href}
-        className="flex items-center gap-2 rounded-md px-2 py-2 text-[10px] text-slate-300 transition hover:bg-blue-600/30 hover:text-white"
-      >
-        <span className="w-4 text-center text-sm">{item.icon}</span>
-        <span>{item.label}</span>
+export default function Sidebar({ profile, onLogout }) {
+  const initials = (profile?.email || "SOC").slice(0, 2).toUpperCase();
 
-        {item.badge && (
-          <span className="ml-auto rounded-full bg-red-500 px-1.5 py-0.5 text-[8px]">
-            4
-          </span>
-        )}
-      </a>
-    ))}
-  </nav>
-
-  <div className="absolute bottom-0 w-full border-t border-cyan-900/70 p-2">
-    <div className="mb-2 flex items-center gap-2">
-      <div className="flex h-7 w-7 items-center justify-center rounded-full bg-blue-500 text-[10px]">
-        A
+  return (
+    <aside className="hidden lg:fixed lg:inset-y-0 lg:left-0 lg:z-40 lg:flex lg:w-56 lg:flex-col lg:border-r lg:border-cyan-900/60 lg:bg-[#031428]">
+      <div className="border-b border-cyan-900/60 px-4 py-4">
+        <p className="text-sm font-semibold tracking-wide text-cyan-200">AI-SOC Command</p>
+        <p className="text-[11px] text-cyan-400/80">Automated Firewall Response</p>
       </div>
 
-      <div>
-        <p className="text-[9px] text-white">admin</p>
-        <p className="text-[8px] text-slate-500">Administrator</p>
-      </div>
-    </div>
+      <nav className="flex-1 space-y-1.5 px-3 py-4">
+        {NAV_ITEMS.map((item) => {
+          const Icon = item.icon;
+          return (
+            <NavLink
+              key={item.to}
+              to={item.to}
+              className={({ isActive }) =>
+                `flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition ${
+                  isActive
+                    ? "bg-cyan-500/15 text-cyan-300 border border-cyan-500/30"
+                    : "text-slate-300 hover:bg-slate-800/70 hover:text-white"
+                }`
+              }
+            >
+              <Icon size={16} />
+              <span>{item.label}</span>
+            </NavLink>
+          );
+        })}
+      </nav>
 
-    <button className="flex w-full items-center gap-2 px-1 py-2 text-[10px] text-slate-400 hover:text-white">
-      ⇥ Logout
-    </button>
-  </div>
-</aside>
+      <div className="border-t border-cyan-900/60 px-3 py-3">
+        <div className="mb-3 flex items-center gap-3 rounded-lg border border-slate-800 bg-slate-900/50 p-2">
+          <div className="grid h-8 w-8 place-items-center rounded-full bg-cyan-500/30 text-xs font-semibold text-cyan-100">
+            {initials}
+          </div>
+          <div className="min-w-0">
+            <p className="truncate text-xs text-white">{profile?.email || "soc@local"}</p>
+            <p className="text-[10px] text-slate-400">SOC Analyst</p>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          onClick={onLogout}
+          className="flex w-full items-center justify-center gap-2 rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-300 hover:bg-red-500/20"
+        >
+          <LogOut size={14} />
+          Logout
+        </button>
+      </div>
+    </aside>
+  );
+}
