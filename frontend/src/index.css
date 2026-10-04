@@ -2,7 +2,29 @@
 @tailwind components;
 @tailwind utilities;
 
-html, body, #root {
+html,
+body,
+#root {
   height: 100%;
-  background: #070b14;
+  background: #020b1c;
+  color: #e2e8f0;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #155e75 #020b1c;
+}
+
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+*::-webkit-scrollbar-track {
+  background: #020b1c;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: linear-gradient(#0e7490, #155e75);
+  border-radius: 999px;
 }

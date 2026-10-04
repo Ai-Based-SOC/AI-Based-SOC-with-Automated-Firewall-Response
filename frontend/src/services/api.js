@@ -71,3 +71,7 @@ export const generateReportApi = (incident_id) =>
 // Ingestion
 export const ingestLogsApi = (file_path) =>
   api.post("/ingestion/file", { file_path });
+
+// Simulations (synthetic backend events only)
+export const triggerDosSimulationApi = (payload) =>
+  api.post("/simulations/dos", payload);
