@@ -1,0 +1,134 @@
+services:
+  mongo:
+    image: mongo:7
+    container_name: ai-soc-mongo-prod
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_DATABASE: ${MONGO_DB:-ai_soc_firewall}
+    volumes:
+      - mongo_data:/data/db
+    networks:
+      - soc_internal
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "mongosh --quiet --eval \"db.adminCommand('ping').ok\""
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: ai-soc-backend-prod
+    restart: unless-stopped
+    environment:
+      ENV: prod
+      APP_NAME: AI SOC Firewall
+      APP_VERSION: 1.1.0
+      DOCS_ENABLED: ${DOCS_ENABLED:-false}
+
+      SECRET_KEY: ${SECRET_KEY}
+
+      MONGODB_URI: mongodb://mongo:27017
+      MONGODB_DB: ${MONGO_DB:-ai_soc_firewall}
+
+      CORS_ORIGINS: ${PUBLIC_ORIGIN}
+
+      RATE_LIMIT_DEFAULT: ${RATE_LIMIT_DEFAULT:-120/minute}
+      RATE_LIMIT_LOGIN: ${RATE_LIMIT_LOGIN:-5/minute}
+
+    expose:
+      - "8000"
+
+    depends_on:
+      mongo:
+        condition: service_healthy
+
+    networks:
+      - soc_internal
+
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health', timeout=5)\""
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: /api/v1
+        VITE_WS_BASE_URL: ""
+
+    container_name: ai-soc-frontend-prod
+    restart: unless-stopped
+
+    expose:
+      - "80"
+
+    depends_on:
+      backend:
+        condition: service_healthy
+
+    networks:
+      - soc_internal
+
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "wget --no-verbose --tries=1 --spider http://127.0.0.1/nginx-health || exit 1"
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+
+  reverse-proxy:
+    image: nginx:1.27-alpine
+    container_name: ai-soc-reverse-proxy
+    restart: unless-stopped
+
+    depends_on:
+      frontend:
+        condition: service_healthy
+
+    ports:
+      - "80:80"
+      - "443:443"
+
+    volumes:
+      - ./deploy/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./deploy/certbot/www:/var/www/certbot:ro
+      - ./deploy/certbot/conf:/etc/letsencrypt:ro
+
+    networks:
+      - soc_internal
+
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "wget --no-verbose --tries=1 --spider http://127.0.0.1/health || exit 1"
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  mongo_data:
+
+networks:
+  soc_internal:
+    driver: bridge

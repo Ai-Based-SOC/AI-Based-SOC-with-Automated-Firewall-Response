@@ -9,3 +9,6 @@ __pycache__/
 *.py[cod]
 backend/**/__pycache__/
 ml_models/
+.env
+.env.*
+!.env.example
