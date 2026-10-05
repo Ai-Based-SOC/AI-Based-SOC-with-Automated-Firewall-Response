@@ -1,15 +1,12 @@
-let ws = null;
-let reconnectTimer = null;
-let closedManually = false;
-let retries = 0;
+function getWebSocketBaseUrl() {
+  const configuredUrl = import.meta.env.VITE_WS_BASE_URL;
 
-function getWsBaseUrl() {
-  // 1) explicit env override (recommended if set)
-  const fromEnv = import.meta.env.VITE_WS_BASE_URL;
-  if (fromEnv) return fromEnv.replace(/\/$/, "");
+  if (configuredUrl) {
+    return configuredUrl.replace(/\/$/, "");
+  }
 
-  // 2) derive from VITE_API_URL (e.g. https://host/api/v1 -> wss://host)
   const apiUrl = import.meta.env.VITE_API_URL;
+
   if (apiUrl) {
     return apiUrl
       .replace(/\/api\/v1\/?$/, "")
@@ -18,73 +15,126 @@ function getWsBaseUrl() {
       .replace(/\/$/, "");
   }
 
-  // 3) safe fallback: derive from current browser origin
-  const proto = window.location.protocol === "https:" ? "wss" : "ws";
-  return `${proto}://${window.location.host}`;
+  const protocol =
+    window.location.protocol === "https:" ? "wss" : "ws";
+
+  return `${protocol}://${window.location.host}`;
 }
 
-export function connectAttackSocket({ onMessage, onOpen, onClose }) {
-  const WS_BASE = getWsBaseUrl();
-  const url = `${WS_BASE}/ws/attacks`;
+function parseMessage(event) {
+  if (typeof event.data !== "string") {
+    return null;
+  }
 
-  const clearTimer = () => {
-    if (reconnectTimer) {
-      clearTimeout(reconnectTimer);
+  try {
+    return JSON.parse(event.data);
+  } catch {
+    return null;
+  }
+}
+
+export function connectAttackSocket({
+  onMessage,
+  onOpen,
+  onClose,
+  onError,
+} = {}) {
+  let socket = null;
+  let reconnectTimer = null;
+  let manuallyClosed = false;
+  let reconnectAttempt = 0;
+
+  const url = `${getWebSocketBaseUrl()}/ws/attacks`;
+
+  function clearReconnectTimer() {
+    if (reconnectTimer !== null) {
+      window.clearTimeout(reconnectTimer);
       reconnectTimer = null;
     }
-  };
+  }
 
-  const connect = () => {
-    clearTimer();
-
-    try {
-      ws = new WebSocket(url);
-    } catch {
-      retries += 1;
-      reconnectTimer = setTimeout(connect, Math.min(3000 * retries, 15000));
+  function scheduleReconnect() {
+    if (manuallyClosed || reconnectTimer !== null) {
       return;
     }
 
-    ws.onopen = () => {
-      retries = 0;
+    reconnectAttempt += 1;
+
+    const delay = Math.min(
+      1000 * 2 ** Math.min(reconnectAttempt - 1, 4),
+      15000
+    );
+
+    reconnectTimer = window.setTimeout(() => {
+      reconnectTimer = null;
+      connect();
+    }, delay);
+  }
+
+  function connect() {
+    if (manuallyClosed) {
+      return;
+    }
+
+    clearReconnectTimer();
+
+    try {
+      socket = new WebSocket(url);
+    } catch (error) {
+      onError?.(error);
+      scheduleReconnect();
+      return;
+    }
+
+    socket.onopen = () => {
+      reconnectAttempt = 0;
       onOpen?.();
-      try {
-        ws.send("ping");
-      } catch {}
-    };
 
-    ws.onmessage = (event) => {
       try {
-        const msg = JSON.parse(event.data);
-        onMessage?.(msg);
+        socket?.send("ping");
       } catch {
-        // ignore non-json
+        // Ignore socket teardown errors.
       }
     };
 
-    ws.onclose = () => {
-      onClose?.();
-      if (!closedManually) {
-        retries += 1;
-        reconnectTimer = setTimeout(connect, Math.min(3000 * retries, 15000));
+    socket.onmessage = (event) => {
+      const message = parseMessage(event);
+
+      if (message) {
+        onMessage?.(message);
       }
     };
 
-    ws.onerror = () => {
-      try {
-        ws?.close();
-      } catch {}
+    socket.onerror = (error) => {
+      onError?.(error);
     };
-  };
 
-  closedManually = false;
+    socket.onclose = (event) => {
+      socket = null;
+      onClose?.(event);
+      scheduleReconnect();
+    };
+  }
+
+  manuallyClosed = false;
   connect();
 
   return () => {
-    closedManually = true;
-    clearTimer();
-    try {
-      ws?.close();
-    } catch {}
+    manuallyClosed = true;
+    clearReconnectTimer();
+
+    if (socket) {
+      try {
+        socket.close();
+      } catch {
+        // Ignore close errors.
+      }
+    }
+
+    socket = null;
   };
+}
+
+export function getWebSocketBaseUrlForDebugging() {
+  return getWebSocketBaseUrl();
 }
