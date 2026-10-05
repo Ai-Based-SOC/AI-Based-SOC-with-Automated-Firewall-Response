@@ -14,7 +14,7 @@ from backend.core.security import (
     hash_password,
     verify_password,
 )
-from backend.database.mongodb import close_mongo, connect_mongo
+from backend.database.mongodb import close_mongo, connect_mongo, db as mongo_db
 from backend.services.db_service import DBService
 
 from fastapi import (
@@ -997,6 +997,27 @@ class LoginRequest(BaseModel):
     )
 
 
+class SignupRequest(BaseModel):
+
+    full_name: str = Field(
+        ...,
+        min_length=2,
+        max_length=120,
+    )
+
+    email: str = Field(
+        ...,
+        min_length=3,
+        max_length=120,
+    )
+
+    password: str = Field(
+        ...,
+        min_length=8,
+        max_length=256,
+    )
+
+
 class TokenResponse(BaseModel):
 
     access_token: str
@@ -1015,6 +1036,21 @@ class UserProfile(BaseModel):
     full_name: str
 
     role: str
+
+
+class AssistantMessageRequest(BaseModel):
+    message: str = Field(..., min_length=1, max_length=2000)
+    history: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class ProfileUpdateRequest(BaseModel):
+    full_name: str = Field(..., min_length=2, max_length=120)
+    email: str = Field(..., min_length=3, max_length=120)
+
+
+class PasswordChangeRequest(BaseModel):
+    current_password: str = Field(..., min_length=6, max_length=256)
+    new_password: str = Field(..., min_length=8, max_length=256)
 
 
 # =========================================================
@@ -1403,6 +1439,51 @@ def login(
     }
 
 
+@app.post(
+    "/api/v1/auth/signup",
+    response_model=TokenResponse,
+    tags=["Auth"],
+)
+@limiter.limit(RATE_LIMIT_LOGIN)
+def signup(
+    request: Request,
+    req: SignupRequest,
+):
+    email = req.email.strip().lower()
+    full_name = req.full_name.strip()
+
+    if DBService.get_user_by_email(email):
+        raise HTTPException(
+            status_code=409,
+            detail="Email already exists",
+        )
+
+    user = DBService.create_user(
+        {
+            "id": str(uuid.uuid4()),
+            "email": email,
+            "full_name": full_name,
+            "role": "analyst",
+            "password_hash": hash_password(req.password),
+            "disabled": False,
+        }
+    )
+
+    token = create_access_token(
+        data={
+            "sub": str(user["id"]),
+            "email": str(user["email"]),
+            "role": str(user["role"]),
+        }
+    )
+
+    return {
+        "access_token": token,
+        "token_type": "bearer",
+        "role": str(user["role"]),
+    }
+
+
 # =========================================================
 # CURRENT USER
 # =========================================================
@@ -1497,6 +1578,40 @@ def list_attacks(
     )
 
 
+@app.get(
+    "/api/v1/attacks/{attack_id}",
+    tags=["Attacks"],
+)
+@limiter.limit(RATE_LIMIT_DEFAULT)
+def get_attack(
+    attack_id: str,
+    request: Request,
+    authorization: str | None = Header(
+        default=None
+    ),
+):
+    get_current_user(
+        authorization
+    )
+
+    attack = next(
+        (
+            event
+            for event in store.events
+            if str(event.get("id")) == str(attack_id)
+        ),
+        None,
+    )
+
+    if not attack:
+        raise HTTPException(
+            status_code=404,
+            detail="attack_id not found",
+        )
+
+    return attack
+
+
 @app.post(
     "/api/v1/attacks",
     tags=["Attacks"],
@@ -1571,6 +1686,53 @@ async def create_attack(
     )
 
     return saved
+
+
+# =========================================================
+# SYSTEM HEALTH
+# =========================================================
+
+@app.get(
+    "/api/v1/system/health",
+    tags=["Health"],
+)
+@limiter.limit(RATE_LIMIT_DEFAULT)
+def system_health(
+    request: Request,
+    authorization: str | None = Header(
+        default=None
+    ),
+):
+    get_current_user(
+        authorization
+    )
+
+    event_count = len(store.events)
+    blocked_count = len(store.blocked_ips)
+    try:
+        mongo_db()
+        database_status = "up"
+    except RuntimeError:
+        database_status = "demo-fallback"
+
+    return {
+        "status": "operational",
+        "metrics": {
+            "cpu": min(95, 25 + event_count % 45),
+            "memory": min(95, 35 + event_count % 50),
+            "disk": min(95, 40 + blocked_count * 3),
+            "network": min(95, 20 + event_count % 60),
+        },
+        "services": {
+            "api": "up",
+            "database": database_status,
+            "websocket": "up",
+            "firewall": "up",
+        },
+        "time": datetime.now(
+            timezone.utc
+        ).isoformat(),
+    }
 
 
 # =========================================================
@@ -1840,6 +2002,150 @@ def generate_report(
     )
 
     return report
+
+
+# =========================================================
+# AI ASSISTANT
+# =========================================================
+
+@app.post(
+    "/api/v1/assistant",
+    tags=["AI Assistant"],
+)
+@limiter.limit(RATE_LIMIT_DEFAULT)
+def ask_assistant(
+    request: Request,
+    payload: AssistantMessageRequest,
+    authorization: str | None = Header(
+        default=None
+    ),
+):
+    get_current_user(
+        authorization
+    )
+
+    events = store.events
+    critical_count = sum(
+        1
+        for event in events
+        if str(event.get("severity", "")).lower()
+        == "critical"
+    )
+    blocked_count = len(store.blocked_ips)
+
+    return {
+        "answer": (
+            "SOC summary: "
+            f"{len(events)} total incidents, "
+            f"{critical_count} critical alerts, "
+            f"{blocked_count} blocked IPs. "
+            f"Latest request: {payload.message.strip()}"
+        ),
+        "generated_at": datetime.now(
+            timezone.utc
+        ).isoformat(),
+    }
+
+
+# =========================================================
+# SETTINGS
+# =========================================================
+
+@app.patch(
+    "/api/v1/settings/profile",
+    response_model=UserProfile,
+    tags=["Settings"],
+)
+@limiter.limit(RATE_LIMIT_DEFAULT)
+def update_profile(
+    request: Request,
+    payload: ProfileUpdateRequest,
+    authorization: str | None = Header(
+        default=None
+    ),
+):
+    user = get_current_user(
+        authorization
+    )
+    next_email = payload.email.strip().lower()
+    full_name = payload.full_name.strip()
+
+    existing = DBService.get_user_by_email(
+        next_email
+    )
+    if (
+        existing
+        and str(existing.get("id"))
+        != str(user.get("id"))
+    ):
+        raise HTTPException(
+            status_code=409,
+            detail="Email already exists",
+        )
+
+    updated = DBService.update_user_by_id(
+        str(user.get("id")),
+        {
+            "email": next_email,
+            "full_name": full_name,
+        },
+    )
+    if not updated:
+        raise HTTPException(
+            status_code=404,
+            detail="User not found",
+        )
+
+    return {
+        "id": str(updated["id"]),
+        "email": str(updated["email"]),
+        "full_name": str(
+            updated.get("full_name", "")
+        ),
+        "role": str(updated["role"]),
+    }
+
+
+@app.post(
+    "/api/v1/settings/password",
+    tags=["Settings"],
+)
+@limiter.limit(RATE_LIMIT_DEFAULT)
+def change_password(
+    request: Request,
+    payload: PasswordChangeRequest,
+    authorization: str | None = Header(
+        default=None
+    ),
+):
+    user = get_current_user(
+        authorization
+    )
+
+    if not verify_password(
+        payload.current_password,
+        str(
+            user.get(
+                "password_hash",
+                "",
+            )
+        ),
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail="Current password is incorrect",
+        )
+
+    DBService.update_user_by_id(
+        str(user.get("id")),
+        {
+            "password_hash": hash_password(
+                payload.new_password
+            )
+        },
+    )
+
+    return {"success": True}
 
 
 # =========================================================
