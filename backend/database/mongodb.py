@@ -7,7 +7,17 @@ _db = None
 
 def connect_mongo():
     global _client, _db
-    _client = MongoClient(settings.mongodb_uri)
+    _client = MongoClient(
+        settings.mongodb_uri,
+        serverSelectionTimeoutMS=2000,
+    )
+    try:
+        _client.admin.command("ping")
+    except Exception:
+        _client.close()
+        _client = None
+        _db = None
+        raise
     _db = _client[settings.mongodb_db]
     return _db
 

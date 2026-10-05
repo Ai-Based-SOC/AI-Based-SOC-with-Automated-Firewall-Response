@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from uuid import uuid4
 
 from fastapi.testclient import TestClient
 
@@ -19,6 +20,21 @@ def test_auth_me_requires_token():
     with TestClient(app) as client:
         res = client.get("/api/v1/auth/me")
         assert res.status_code == 401, res.text
+
+
+def test_auth_signup_success():
+    with TestClient(app) as client:
+        payload = {
+            "full_name": "SOC Analyst",
+            "email": f"analyst-{uuid4().hex[:8]}@soc.local",
+            "password": "Analyst@123",
+        }
+        res = client.post("/api/v1/auth/signup", json=payload)
+        assert res.status_code == 200, res.text
+        body = res.json()
+        assert "access_token" in body
+        assert body["token_type"] == "bearer"
+        assert body["role"] == "analyst"
 
 
 def test_reports_generate_success_with_token():
@@ -57,3 +73,10 @@ def test_reports_generate_success_with_token():
         body = res.json()
         assert body["report_name"].endswith(".pdf")
         assert body["report_path"].startswith("reports/")
+
+        attack_lookup = client.get(
+            f"/api/v1/attacks/{incident_id}",
+            headers=headers,
+        )
+        assert attack_lookup.status_code == 200, attack_lookup.text
+        assert str(attack_lookup.json().get("id")) == str(incident_id)

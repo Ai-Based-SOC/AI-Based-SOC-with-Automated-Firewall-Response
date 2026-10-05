@@ -17,7 +17,7 @@ from backend.core.security import (
     hash_password,
     verify_password,
 )
-from backend.database.mongodb import close_mongo, connect_mongo
+from backend.database.mongodb import close_mongo, connect_mongo, db as mongo_db
 from backend.services.db_service import DBService
 
 from fastapi import (
@@ -691,9 +691,23 @@ class LoginRequest(BaseModel):
 
 
 class SignupRequest(BaseModel):
-    full_name: str = Field(..., min_length=2, max_length=120)
-    email: str = Field(..., min_length=5, max_length=120)
-    password: str = Field(..., min_length=8, max_length=256)
+    full_name: str = Field(
+        ...,
+        min_length=2,
+        max_length=120,
+    )
+
+    email: str = Field(
+        ...,
+        min_length=3,
+        max_length=120,
+    )
+
+    password: str = Field(
+        ...,
+        min_length=8,
+        max_length=256,
+    )
 
 
 class TokenResponse(BaseModel):
@@ -747,14 +761,19 @@ class AssistantRequest(BaseModel):
     history: list[dict[str, Any]] = Field(default_factory=list)
 
 
+class AssistantMessageRequest(AssistantRequest):
+    """Backward-compatible request model name."""
+    pass
+
+
 class ProfileUpdateRequest(BaseModel):
     full_name: str = Field(..., min_length=2, max_length=120)
-    email: str = Field(..., min_length=5, max_length=120)
+    email: str = Field(..., min_length=3, max_length=120)
 
 
 class PasswordChangeRequest(BaseModel):
-    current_password: str = Field(..., min_length=6)
-    new_password: str = Field(..., min_length=8)
+    current_password: str = Field(..., min_length=6, max_length=256)
+    new_password: str = Field(..., min_length=8, max_length=256)
 
 
 class ThreatIntelRequest(BaseModel):
@@ -846,11 +865,11 @@ def get_current_user(
 
     try:
         payload = decode_access_token(token)
-    except Exception as exc:
+    except Exception:
         raise HTTPException(
             status_code=401,
             detail="Invalid access token",
-        ) from exc
+        )
 
     user_id = str(payload.get("sub") or "")
 
@@ -1073,41 +1092,50 @@ def login(
     }
 
 
-@app.post("/api/v1/auth/signup")
-def signup(payload: SignupRequest) -> dict[str, Any]:
-    email = payload.email.strip().lower()
+@app.post("/api/v1/auth/signup", response_model=TokenResponse, tags=["Auth"])
+@limiter.limit(RATE_LIMIT_LOGIN)
+def signup(
+    request: Request,
+    req: SignupRequest,
+) -> dict[str, Any]:
+    email = req.email.strip().lower()
+    full_name = req.full_name.strip()
 
     if DBService.get_user_by_email(email):
         raise HTTPException(
             status_code=409,
-            detail="An account with this email already exists.",
+            detail="Email already exists",
         )
 
-    user = {
-        "id": str(uuid.uuid4()),
-        "email": email,
-        "full_name": payload.full_name.strip(),
-        "role": "analyst",
-        "password_hash": hash_password(payload.password),
-        "disabled": False,
-    }
-
-    DBService.upsert_seed_user(user)
+    user = DBService.create_user(
+        {
+            "id": str(uuid.uuid4()),
+            "email": email,
+            "full_name": full_name,
+            "role": "analyst",
+            "password_hash": hash_password(req.password),
+            "disabled": False,
+        }
+    )
 
     token = create_access_token(
         data={
-            "sub": user["id"],
-            "email": user["email"],
-            "role": user["role"],
+            "sub": str(user["id"]),
+            "email": str(user["email"]),
+            "role": str(user["role"]),
         }
     )
 
     return {
         "access_token": token,
         "token_type": "bearer",
-        "role": user["role"],
+        "role": str(user["role"]),
     }
 
+
+# -----------------------------------------------------------------------------
+# Current user
+# -----------------------------------------------------------------------------
 
 @app.get(
     "/api/v1/auth/me",
@@ -1426,8 +1454,7 @@ async def generate_report(
         f"Risk Score: {incident.get('risk_score')}",
         f"Confidence: {incident.get('confidence')}",
         f"Reason: {incident.get('reason')}",
-        "MITRE: "
-        + ", ".join(
+        "MITRE: " + ", ".join(
             incident.get("mitre_techniques") or []
         ),
         f"Action Taken: {incident.get('action_taken')}",

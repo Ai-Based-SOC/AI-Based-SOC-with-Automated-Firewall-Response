@@ -17,7 +17,18 @@ export default function SignupPage({ onSignupSuccess }) {
     setError("");
 
     try {
-      await signupApi(form);
+      const { data } = await signupApi(form);
+      const token = data?.access_token;
+
+      if (token) {
+        localStorage.setItem("soc_token", token);
+        localStorage.setItem("access_token", token);
+      }
+
+      if (data?.role) {
+        localStorage.setItem("role", data.role);
+      }
+
       await onSignupSuccess?.();
     } catch (requestError) {
       setError(
