@@ -125,6 +125,40 @@ class DBService:
             _FAKE_USERS.setdefault(email, safe_doc)
 
     @staticmethod
+    def update_user_by_id(user_id: str, updates: dict[str, Any]) -> dict[str, Any] | None:
+        user_id = str(user_id).strip()
+        if not user_id:
+            return None
+
+        patch = {
+            k: v for k, v in updates.items() if v is not None
+        }
+        patch["updated_at"] = datetime.now(timezone.utc)
+
+        try:
+            col = DBService.get_user_collection()
+            doc: dict[str, Any] | None = None
+            try:
+                oid = ObjectId(user_id)
+                col.update_one({"_id": oid}, {"$set": patch})
+                doc = col.find_one({"_id": oid})
+            except (InvalidId, TypeError, ValueError):
+                doc = None
+
+            if not doc:
+                col.update_one({"id": user_id}, {"$set": patch})
+                doc = col.find_one({"id": user_id})
+
+            return DBService._normalize_doc(doc)
+        except RuntimeError:
+            for email, user in _FAKE_USERS.items():
+                if str(user.get("id")) == user_id:
+                    user.update(patch)
+                    _FAKE_USERS[email] = user
+                    return DBService._normalize_doc(user)
+            return None
+
+    @staticmethod
     def insert_attack(item: dict[str, Any]) -> dict[str, Any]:
         col = DBService.get_attack_collection()
         now = datetime.now(timezone.utc)
