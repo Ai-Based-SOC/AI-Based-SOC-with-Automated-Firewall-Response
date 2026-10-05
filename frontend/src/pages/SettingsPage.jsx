@@ -1,107 +1,110 @@
-import { useEffect } from "react";
-import { useAuth } from "../useAuth";
-import { MetricCard } from "../components/MetricCard";
-import { DataTable } from "../components/DataTable";
-import { StatusBadge } from "../components/StatusBadge";
-import { EmptyState } from "../components/EmptyState";
-import { LoadingState } from "../components/LoadingState";
+import { useState } from "react";
+import PageShell from "../components/PageShell";
+import Panel from "../components/Panel";
+import {
+  changePasswordApi,
+  updateProfileApi,
+} from "../services/api";
 
-export default function SettingsPage() {
-  const { profile } = useAuth();
-  const [form, setForm] = useState({
-    notifications: true,
-    api_enabled: false,
-  });
+export default function SettingsPage({ profile, onLogout }) {
+  const [fullName, setFullName] = useState(profile?.full_name || "");
+  const [email, setEmail] = useState(profile?.email || "");
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [message, setMessage] = useState("");
 
-  useEffect(() => {
-    // Load settings
-  }, []);
+  async function updateProfile(event) {
+    event.preventDefault();
 
-  const handleSave = () => {
-    // Save settings
-  };
+    try {
+      await updateProfileApi({
+        full_name: fullName,
+        email,
+      });
+
+      setMessage("Profile updated successfully.");
+    } catch {
+      setMessage("Profile update failed.");
+    }
+  }
+
+  async function updatePassword(event) {
+    event.preventDefault();
+
+    try {
+      await changePasswordApi({
+        current_password: currentPassword,
+        new_password: newPassword,
+      });
+
+      setCurrentPassword("");
+      setNewPassword("");
+      setMessage("Password changed successfully.");
+    } catch {
+      setMessage("Password change failed.");
+    }
+  }
 
   return (
-    <div className="min-h-screen soc-page">
-      <AppShell>
-        <Routes>
-          <Route path="/" element={<Navigate to="/profile" replace />} />
-          <Route path="/profile" element={<ProfileSection />} />
-          <Route path="/notifications" element={<NotificationSettings />} />
-          <Route path="/api" element={<APIConfig />} />
-          <Route path="/firewall-simulation" element={<FirewallSimulation />} />
-        </Routes>
-      </AppShell>
-    </div>
-  );
-}
+    <PageShell title="Settings" profile={profile} onLogout={onLogout}>
+      <div className="mx-auto grid max-w-[1200px] grid-cols-1 gap-4 xl:grid-cols-2">
+        <Panel title="Profile">
+          <form onSubmit={updateProfile} className="space-y-4">
+            <label className="block text-sm text-slate-400">
+              Full Name
+              <input
+                value={fullName}
+                onChange={(event) => setFullName(event.target.value)}
+                className="mt-1 w-full rounded-lg border border-cyan-900 bg-[#041326] px-3 py-2 text-sm text-white"
+              />
+            </label>
 
-function ProfileSection() {
-  return (
-    <div className="p-6">
-      <h2 className="soc-heading mb-4">Profile</h2>
-      <div className="grid grid-cols-2 gap-4 mb-6">
-        <div>
-          <label className="soc-label">Name</label>
-          <input className="soc-input" readOnly />
-        </div>
-        <div>
-          <label className="soc-label">Role</label>
-          <select className="soc-input">
-            <option>Analyst</option>
-            <option>Admin</option>
-          </select>
-        </div>
+            <label className="block text-sm text-slate-400">
+              Email
+              <input
+                type="email"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                className="mt-1 w-full rounded-lg border border-cyan-900 bg-[#041326] px-3 py-2 text-sm text-white"
+              />
+            </label>
+
+            <button className="rounded-lg bg-blue-600 px-4 py-2 text-sm">
+              Update Profile
+            </button>
+          </form>
+        </Panel>
+
+        <Panel title="Change Password">
+          <form onSubmit={updatePassword} className="space-y-4">
+            <input
+              type="password"
+              placeholder="Current password"
+              value={currentPassword}
+              onChange={(event) => setCurrentPassword(event.target.value)}
+              className="w-full rounded-lg border border-cyan-900 bg-[#041326] px-3 py-2 text-sm"
+            />
+
+            <input
+              type="password"
+              placeholder="New password"
+              value={newPassword}
+              onChange={(event) => setNewPassword(event.target.value)}
+              className="w-full rounded-lg border border-cyan-900 bg-[#041326] px-3 py-2 text-sm"
+            />
+
+            <button className="rounded-lg bg-blue-600 px-4 py-2 text-sm">
+              Change Password
+            </button>
+          </form>
+        </Panel>
+
+        {message && (
+          <div className="xl:col-span-2 rounded-lg border border-cyan-900 bg-cyan-500/10 p-3 text-sm text-cyan-200">
+            {message}
+          </div>
+        )}
       </div>
-      <button className="soc-btn soc-btn-secondary w-full">Save Changes</button>
-    </div>
-  );
-}
-
-function NotificationSettings() {
-  return (
-    <div className="p-6">
-      <h2 className="soc-heading mb-4">Notifications</h2>
-      <div className="space-y-4">
-        <div>
-          <label className="soc-label">Email alerts</label>
-          <label className="soc-switch">
-            <input type="checkbox" checked defaultChecked />
-            <span className="soc-switch-slider"></span>
-          </label>
-        </div>
-        <div>
-          <label className="soc-label">Push notifications</label>
-          <label className="soc-switch">
-            <input type="checkbox" checked defaultChecked />
-            <span className="soc-switch-slider"></span>
-          </label>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function APIConfig() {
-  return (
-    <div className="p-6">
-      <h2 className="soc-heading mb-4">API Integration</h2>
-      <p className="text-soc-muted mb-4">Configure integration endpoints here.</p>
-      <button className="soc-btn soc-btn-primary">Save Configuration</button>
-    </div>
-  );
-}
-
-function FirewallSimulation() {
-  return (
-    <div className="p-6">
-      <h2 className="soc-heading mb-4">Firewall Simulation Controls</h2>
-      <div className="alert alert-warning soc-alert mb-4">
-        <span className="icon"><ShieldAlert size={16} /></span>
-        <strong>Simulation Mode:</strong> This is a simulation-only feature. No real firewall rules will be modified.
-      </div>
-      <button className="soc-btn soc-btn-danger">Initialize Simulation</button>
-      <p className="text-soc-muted mt-4">Simulated actions for training purposes only.</p>
-    </div>
+    </PageShell>
   );
 }

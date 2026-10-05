@@ -1,131 +1,100 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { loginApi, signupApi, meApi } from "../services/api";
+import { Link } from "react-router-dom";
+import { signupApi } from "../services/api";
 
-export default function SignupPage({ onSuccess }) {
-  const navigate = useNavigate();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [passwordConfirm, setPasswordConfirm] = useState("");
-  const [fullName, setFullName] = useState("");
-  const [loading, setLoading] = useState(false);
+export default function SignupPage({ onSignupSuccess }) {
+  const [form, setForm] = useState({
+    full_name: "",
+    email: "",
+    password: "",
+  });
   const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (loading) return;
+  async function submit(event) {
+    event.preventDefault();
+    setBusy(true);
     setError("");
-    setLoading(true);
 
     try {
-      const { data } = await signupApi(email, password, passwordConfirm, fullName);
-      const token = data?.access_token;
-
-      if (!token) throw new Error("No access token received");
-
-      localStorage.setItem("soc_token", token);
-      localStorage.setItem("access_token", token);
-
-      let profile = {
-        id: "dev-user",
-        email,
-        full_name: fullName || email.split("@")[0],
-        role: data?.role || "user",
-      };
-
-      try {
-        const meRes = await meApi();
-        if (meRes?.data) profile = meRes.data;
-      } catch {
-        // ignore and keep fallback profile
-      }
-
-      localStorage.setItem("user", JSON.stringify(profile));
-      onSuccess?.(profile);
-      navigate("/", { replace: true });
-    } catch (err) {
-      const msg = err?.response?.data?.detail || err?.message || "Signup failed";
-      setError(typeof msg === "string" ? msg : JSON.stringify(msg));
+      await signupApi(form);
+      await onSignupSuccess?.();
+    } catch (requestError) {
+      setError(
+        requestError?.response?.data?.detail ||
+          "Unable to create account."
+      );
     } finally {
-      setLoading(false);
+      setBusy(false);
     }
-  };
+  }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white flex items-center justify-center p-4">
-      <div className="w-full max-w-md rounded-2xl border border-slate-700 bg-slate-900/70 p-8">
-        <h1 className="text-2xl font-bold mb-4">AI SOC Firewall</h1>
-        <p className="text-slate-400 mb-6">Create an account</p>
+    <main className="grid min-h-screen place-items-center bg-[#020b1c] p-4">
+      <form
+        onSubmit={submit}
+        className="w-full max-w-md rounded-2xl border border-cyan-900 bg-[#071426] p-8"
+      >
+        <h1 className="text-3xl font-bold text-white">Create Account</h1>
+        <p className="mt-2 text-sm text-slate-400">
+          Join the AI SOC platform
+        </p>
 
-        {error ? (
-          <div className="rounded-md border border-red-700 bg-red-950/40 text-red-300 px-3 py-2 mb-4">
-            {error}
-          </div>
-        ) : null}
+        <div className="mt-6 space-y-4">
+          <input
+            required
+            placeholder="Full name"
+            value={form.full_name}
+            onChange={(event) =>
+              setForm({ ...form, full_name: event.target.value })
+            }
+            className="w-full rounded-lg border border-cyan-900 bg-[#041326] px-3 py-3"
+          />
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="text-sm text-slate-300 block mb-1">Email</label>
-            <input
-              type="email"
-              required
-              autoComplete="username"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 outline-none focus:border-cyan-500"
-              placeholder="admin@soc.local"
-            />
-          </div>
+          <input
+            required
+            type="email"
+            placeholder="Email"
+            value={form.email}
+            onChange={(event) =>
+              setForm({ ...form, email: event.target.value })
+            }
+            className="w-full rounded-lg border border-cyan-900 bg-[#041326] px-3 py-3"
+          />
 
-          <div>
-            <label className="text-sm text-slate-300 block mb-1">Full Name</label>
-            <input
-              type="text"
-              value={fullName}
-              onChange={(e) => setFullName(e.target.value)}
-              className="w-full rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 outline-none focus:border-cyan-500"
-              placeholder="SOC User"
-            />
-          </div>
-
-          <div>
-            <label className="text-sm text-slate-300 block mb-1">Password</label>
-            <input
-              type="password"
-              required
-              autoComplete="current-password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 outline-none focus:border-cyan-500"
-              placeholder="********"
-            />
-          </div>
-
-          <div>
-            <label className="text-sm text-slate-300 block mb-1">Confirm Password</label>
-            <input
-              type="password"
-              required
-              autoComplete="current-password"
-              value={passwordConfirm}
-              onChange={(e) => setPasswordConfirm(e.target.value)}
-              className="w-full rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 outline-none focus:border-cyan-500"
-              placeholder="********"
-            />
-          </div>
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full rounded-lg bg-cyan-700 hover:bg-cyan-600 disabled:opacity-60 px-4 py-2 font-medium">
-            {loading ? "Creating..." : "Sign Up"}
-          </button>
-        </form>
-
-        <div className="mt-6 text-sm text-slate-400">
-          Already have an account? <span className="cursor-pointer text-cyan-400" onClick={() => navigate("/login")}>Login</span>
+          <input
+            required
+            minLength={8}
+            type="password"
+            placeholder="Password"
+            value={form.password}
+            onChange={(event) =>
+              setForm({ ...form, password: event.target.value })
+            }
+            className="w-full rounded-lg border border-cyan-900 bg-[#041326] px-3 py-3"
+          />
         </div>
-      </div>
-    </div>
+
+        {error && (
+          <p className="mt-4 rounded-lg bg-red-500/10 p-3 text-sm text-red-300">
+            {error}
+          </p>
+        )}
+
+        <button
+          disabled={busy}
+          className="mt-5 w-full rounded-lg bg-blue-600 py-3 font-semibold disabled:opacity-50"
+        >
+          {busy ? "Creating..." : "Create Account"}
+        </button>
+
+        <Link
+          to="/login"
+          className="mt-4 block text-center text-sm text-cyan-300"
+        >
+          Already have an account? Sign in
+        </Link>
+      </form>
+    </main>
   );
 }

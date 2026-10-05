@@ -1,407 +1,370 @@
-import { useEffect, useMemo, useState } from "react";
 import {
-  ComposableMap,
-  Geographies,
-  Geography,
-  Marker,
-  Line,
-} from "react-simple-maps";
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+import {
+  Activity,
+  Ban,
+  CheckCircle,
+  MapPin,
+  Shield,
+  Unlock,
+} from "lucide-react";
 
 import PageShell from "../components/PageShell";
 import Panel from "../components/Panel";
 import {
   blockIpApi,
-  unblockIpApi,
-  getAttacksApi,
   checkThreatIntelApi,
+  getAttacksApi,
   getGeoIntelApi,
+  unblockIpApi,
 } from "../services/api";
+import { connectAttackSocket } from "../services/socket";
 
-const geoUrl =
-  "https://raw.githubusercontent.com/deldersveld/topojson/master/countries/world/world.json";
-
-const CENTER_COORDINATES = [78.9629, 20.5937];
-
-function normalizeAttacks(response) {
-  if (Array.isArray(response)) {
-    return response;
-  }
-
-  if (response && Array.isArray(response.data)) {
-    return response.data;
-  }
-
-  if (response && Array.isArray(response.attacks)) {
-    return response.attacks;
-  }
-
-  if (response && Array.isArray(response.items)) {
-    return response.items;
-  }
-
-  if (response && Array.isArray(response.results)) {
-    return response.results;
-  }
+function normalizeAttacks(payload) {
+  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload?.data)) return payload.data;
+  if (Array.isArray(payload?.attacks)) return payload.attacks;
+  if (Array.isArray(payload?.items)) return payload.items;
+  if (Array.isArray(payload?.results)) return payload.results;
 
   return [];
 }
 
+function attackKey(attack) {
+  return (
+    attack?.id ||
+    attack?._id ||
+    [
+      attack?.source_ip || "",
+      attack?.timestamp ||
+        attack?.created_at ||
+        "",
+      attack?.attack_type || "",
+    ].join("|")
+  );
+}
+
+function mergeAttacks(incoming, current) {
+  const seen = new Set();
+
+  return [...incoming, ...current]
+    .filter((attack) => {
+      const key = attackKey(attack);
+
+      if (seen.has(key)) {
+        return false;
+      }
+
+      seen.add(key);
+      return true;
+    })
+    .slice(0, 1000);
+}
+
 function getIp(attack) {
   return (
-    attack?.attacker_ip ||
     attack?.source_ip ||
+    attack?.attacker_ip ||
     attack?.src_ip ||
     attack?.ip_address ||
-    attack?.ip ||
-    ""
+    "Unknown"
   );
 }
 
 function getSeverity(attack) {
-  const value = String(
+  return String(
     attack?.severity ||
       attack?.risk_level ||
       attack?.threat_level ||
       "low"
   ).toLowerCase();
-
-  if (value === "critical") return "Critical";
-  if (value === "high") return "High";
-  if (value === "medium") return "Medium";
-  if (value === "low") return "Low";
-
-  return "Other";
 }
 
 function getAttackType(attack) {
-  const value = String(
+  return (
     attack?.attack_type ||
-      attack?.attackType ||
-      attack?.type ||
-      "Unknown"
+    attack?.attackType ||
+    attack?.type ||
+    "Unknown"
   );
-
-  if (/ddos|dos/i.test(value)) {
-    return "DoS";
-  }
-
-  if (/brute|force/i.test(value)) {
-    return "Brute Force";
-  }
-
-  if (/scan/i.test(value)) {
-    return "Port Scan";
-  }
-
-  if (/web/i.test(value)) {
-    return "Web Attack";
-  }
-
-  if (/malware/i.test(value)) {
-    return "Malware";
-  }
-
-  return value;
 }
 
-function normalizeCoordinates(value) {
-  if (!value) {
+function getAction(attack) {
+  return String(
+    attack?.action_taken ||
+      attack?.action ||
+      attack?.recommended_action ||
+      "Detected"
+  );
+}
+
+function severityClass(value) {
+  if (value === "critical") {
+    return "bg-red-500/20 text-red-300 border-red-500/30";
+  }
+
+  if (value === "high") {
+    return "bg-orange-500/20 text-orange-300 border-orange-500/30";
+  }
+
+  if (value === "medium") {
+    return "bg-yellow-500/20 text-yellow-300 border-yellow-500/30";
+  }
+
+  return "bg-green-500/20 text-green-300 border-green-500/30";
+}
+
+function getCoordinates(response) {
+  const candidate =
+    response?.data ||
+    response?.location ||
+    response?.geo ||
+    response?.geolocation ||
+    response;
+
+  if (!candidate || typeof candidate !== "object") {
     return null;
   }
 
-  if (Array.isArray(value) && value.length >= 2) {
-    const longitude = Number(value[0]);
-    const latitude = Number(value[1]);
-
-    if (
-      Number.isFinite(longitude) &&
-      Number.isFinite(latitude) &&
-      longitude >= -180 &&
-      longitude <= 180 &&
-      latitude >= -90 &&
-      latitude <= 90
-    ) {
-      return [longitude, latitude];
-    }
-  }
-
   const latitude = Number(
-    value.latitude ??
-      value.lat ??
-      value.location?.latitude ??
-      value.location?.lat
+    candidate.latitude ??
+      candidate.lat ??
+      candidate.location?.latitude ??
+      candidate.location?.lat
   );
 
   const longitude = Number(
-    value.longitude ??
-      value.lon ??
-      value.lng ??
-      value.location?.longitude ??
-      value.location?.lon ??
-      value.location?.lng
+    candidate.longitude ??
+      candidate.lon ??
+      candidate.lng ??
+      candidate.location?.longitude ??
+      candidate.location?.lon ??
+      candidate.location?.lng
   );
 
   if (
     Number.isFinite(latitude) &&
     Number.isFinite(longitude) &&
-    longitude >= -180 &&
-    longitude <= 180 &&
     latitude >= -90 &&
-    latitude <= 90
+    latitude <= 90 &&
+    longitude >= -180 &&
+    longitude <= 180
   ) {
-    return [longitude, latitude];
+    return {
+      latitude,
+      longitude,
+      label:
+        candidate.city ||
+        candidate.country ||
+        candidate.country_name ||
+        "Unknown",
+    };
   }
 
   return null;
 }
 
-function getGeoCoordinates(response) {
-  if (!response) {
-    return null;
-  }
-
-  const candidates = [
-    response,
-    response.data,
-    response.location,
-    response.geo,
-    response.geolocation,
-    response.result,
-  ];
-
-  for (const candidate of candidates) {
-    const coordinates = normalizeCoordinates(candidate);
-
-    if (coordinates) {
-      return coordinates;
-    }
-  }
-
-  return null;
-}
-
-function getLocationName(response) {
-  if (!response) {
-    return "Location unavailable";
-  }
-
-  const candidates = [
-    response,
-    response.data,
-    response.location,
-    response.geo,
-    response.geolocation,
-    response.result,
-  ];
-
-  for (const candidate of candidates) {
-    if (!candidate || typeof candidate !== "object") {
-      continue;
-    }
-
-    const value =
-      candidate.city ||
-      candidate.country ||
-      candidate.country_name ||
-      candidate.region ||
-      candidate.location_name ||
-      candidate.display_name;
-
-    if (value) {
-      return String(value);
-    }
-  }
-
-  return "Location unavailable";
-}
-
-function severityClasses(severity) {
-  switch (severity) {
-    case "Critical":
-      return "bg-red-500/20 text-red-400 border-red-500/30";
-
-    case "High":
-      return "bg-orange-500/20 text-orange-400 border-orange-500/30";
-
-    case "Medium":
-      return "bg-yellow-500/20 text-yellow-400 border-yellow-500/30";
-
-    case "Low":
-      return "bg-green-500/20 text-green-400 border-green-500/30";
-
-    default:
-      return "bg-slate-500/20 text-slate-400 border-slate-500/30";
-  }
-}
-
-export default function FirewallPage({ profile, onLogout }) {
+export default function FirewallPage({
+  profile,
+  onLogout,
+}) {
   const [attacks, setAttacks] = useState([]);
-  const [selectedIp, setSelectedIp] = useState("");
   const [blockedIps, setBlockedIps] = useState([]);
-  const [threatIntel, setThreatIntel] = useState(null);
-
-  const [geoLocations, setGeoLocations] = useState({});
-  const [geoLoading, setGeoLoading] = useState(false);
-  const [geoError, setGeoError] = useState("");
-
+  const [selectedIp, setSelectedIp] = useState("");
+  const [selectedIntel, setSelectedIntel] = useState(null);
+  const [locations, setLocations] = useState({});
+  const [firewallEvents, setFirewallEvents] = useState([]);
+  const [activeTab, setActiveTab] = useState("overview");
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
-  const [error, setError] = useState("");
+  const [wsConnected, setWsConnected] = useState(false);
   const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
 
-  const [activeTab, setActiveTab] = useState("overview");
+  const loadAttacks = useCallback(async () => {
+    try {
+      const response = await getAttacksApi(500);
+      const rows = normalizeAttacks(response?.data ?? response);
 
-  /* ---------------------------------------------------------------------- */
-  /* LOAD ATTACKS                                                           */
-  /* ---------------------------------------------------------------------- */
+      setAttacks((current) => mergeAttacks(rows, current));
+
+      const blockedFromEvents = rows
+        .filter((attack) => {
+          const action = getAction(attack).toLowerCase();
+          const status = String(
+            attack?.status || ""
+          ).toLowerCase();
+
+          return (
+            action.includes("block") ||
+            status.includes("block")
+          );
+        })
+        .map(getIp)
+        .filter((ip) => ip !== "Unknown");
+
+      setBlockedIps((current) => [
+        ...new Set([
+          ...current,
+          ...blockedFromEvents,
+        ]),
+      ]);
+    } catch (requestError) {
+      console.error("Firewall loading error:", requestError);
+      setError("Unable to load firewall events.");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    let mounted = true;
+    loadAttacks();
 
-    async function loadAttacks() {
-      try {
-        setLoading(true);
+    const timer = window.setInterval(loadAttacks, 5000);
 
-        const response = await getAttacksApi(300);
+    const disconnect = connectAttackSocket({
+      onOpen: () => setWsConnected(true),
+      onClose: () => setWsConnected(false),
+      onError: () => setWsConnected(false),
+      onMessage: (event) => {
+        if (event?.event === "new_attack") {
+          const attack =
+            event.data ||
+            event.attack ||
+            event.item;
 
-        if (!mounted) {
+          if (attack) {
+            setAttacks((current) =>
+              mergeAttacks([attack], current)
+            );
+          }
+
           return;
         }
 
-        setAttacks(normalizeAttacks(response));
-        setError("");
-      } catch (err) {
-        console.error("Firewall attack loading error:", err);
+        if (event?.event === "firewall_action") {
+          const action =
+            event.data ||
+            event.payload;
 
-        if (mounted) {
-          setError("Unable to load attack data.");
-        }
-      } finally {
-        if (mounted) {
-          setLoading(false);
-        }
-      }
-    }
-
-    loadAttacks();
-
-    const interval = setInterval(loadAttacks, 10000);
-
-    return () => {
-      mounted = false;
-      clearInterval(interval);
-    };
-  }, []);
-
-  /* ---------------------------------------------------------------------- */
-  /* UNIQUE ATTACKER IPS                                                    */
-  /* ---------------------------------------------------------------------- */
-
-  const attackerIps = useMemo(() => {
-    const set = new Set();
-
-    attacks.forEach((attack) => {
-      const ip = getIp(attack);
-
-      if (ip) {
-        set.add(ip);
-      }
-    });
-
-    return Array.from(set);
-  }, [attacks]);
-
-  /* ---------------------------------------------------------------------- */
-  /* GEOLOCATION                                                            */
-  /* ---------------------------------------------------------------------- */
-
-  useEffect(() => {
-    let mounted = true;
-
-    async function loadGeoLocations() {
-      if (attackerIps.length === 0) {
-        return;
-      }
-
-      setGeoLoading(true);
-      setGeoError("");
-
-      const nextLocations = {};
-
-      for (const ip of attackerIps.slice(0, 25)) {
-        try {
-          const response = await getGeoIntelApi(ip);
-
-          if (!mounted) {
+          if (!action?.ip_address) {
             return;
           }
 
-          const coordinates = getGeoCoordinates(response);
+          setFirewallEvents((current) => [
+            {
+              ...action,
+              received_at: new Date().toISOString(),
+            },
+            ...current,
+          ].slice(0, 50));
 
-          if (coordinates) {
-            nextLocations[ip] = {
-              coordinates,
-              name: getLocationName(response),
-            };
+          if (action.action === "block") {
+            setBlockedIps((current) => [
+              ...new Set([
+                action.ip_address,
+                ...current,
+              ]),
+            ]);
+
+            setMessage(
+              `Firewall update: ${action.ip_address} blocked.`
+            );
           }
-        } catch (err) {
-          console.warn(
-            `Unable to retrieve geolocation for ${ip}:`,
-            err
-          );
+
+          if (action.action === "unblock") {
+            setBlockedIps((current) =>
+              current.filter(
+                (ip) => ip !== action.ip_address
+              )
+            );
+
+            setMessage(
+              `Firewall update: ${action.ip_address} unblocked.`
+            );
+          }
         }
-      }
+      },
+    });
 
-      if (!mounted) {
-        return;
-      }
+    return () => {
+      window.clearInterval(timer);
+      disconnect?.();
+    };
+  }, [loadAttacks]);
 
-      setGeoLocations(nextLocations);
-      setGeoLoading(false);
+  const attackerIps = useMemo(() => {
+    return [
+      ...new Set(
+        attacks
+          .map(getIp)
+          .filter((ip) => ip !== "Unknown")
+      ),
+    ];
+  }, [attacks]);
 
-      if (
-        Object.keys(nextLocations).length === 0 &&
-        attackerIps.length > 0
-      ) {
-        setGeoError("No geolocation data available for the detected IPs.");
+  useEffect(() => {
+    let active = true;
+
+    async function loadLocations() {
+      const values = await Promise.all(
+        attackerIps.slice(0, 20).map(async (ip) => {
+          try {
+            const response = await getGeoIntelApi(ip);
+            const location = getCoordinates(response);
+
+            return location ? [ip, location] : null;
+          } catch {
+            return null;
+          }
+        })
+      );
+
+      if (active) {
+        setLocations(
+          Object.fromEntries(values.filter(Boolean))
+        );
       }
     }
 
-    loadGeoLocations();
+    if (attackerIps.length) {
+      loadLocations();
+    }
 
     return () => {
-      mounted = false;
+      active = false;
     };
   }, [attackerIps]);
 
-  /* ---------------------------------------------------------------------- */
-  /* SELECT IP                                                               */
-  /* ---------------------------------------------------------------------- */
+  const criticalCount = attacks.filter(
+    (attack) => getSeverity(attack) === "critical"
+  ).length;
 
-  async function handleSelectIp(ip) {
+  const highCount = attacks.filter(
+    (attack) => getSeverity(attack) === "high"
+  ).length;
+
+  async function selectIp(ip) {
     setSelectedIp(ip);
+    setSelectedIntel(null);
     setMessage("");
     setError("");
-    setThreatIntel(null);
 
-    if (!ip) {
-      return;
-    }
+    if (!ip) return;
 
     try {
       const response = await checkThreatIntelApi(ip);
-
-      setThreatIntel(response);
-    } catch (err) {
-      console.warn("Threat intelligence lookup failed:", err);
+      setSelectedIntel(response?.data ?? response);
+    } catch {
+      setError("Threat intelligence lookup failed.");
     }
   }
 
-  /* ---------------------------------------------------------------------- */
-  /* BLOCK IP                                                                */
-  /* ---------------------------------------------------------------------- */
-
-  async function handleBlockIp() {
+  async function blockSelectedIp() {
     if (!selectedIp) {
       setError("Select an attacker IP first.");
       return;
@@ -409,26 +372,24 @@ export default function FirewallPage({ profile, onLogout }) {
 
     try {
       setActionLoading(true);
-      setError("");
       setMessage("");
+      setError("");
 
       await blockIpApi(selectedIp);
 
-      setBlockedIps((previous) => {
-        if (previous.includes(selectedIp)) {
-          return previous;
-        }
+      setBlockedIps((current) => [
+        ...new Set([
+          selectedIp,
+          ...current,
+        ]),
+      ]);
 
-        return [...previous, selectedIp];
-      });
-
-      setMessage(`${selectedIp} has been submitted for firewall blocking.`);
-    } catch (err) {
-      console.error("Block IP error:", err);
-
+      setMessage(
+        `${selectedIp} was submitted for blocking.`
+      );
+    } catch (requestError) {
       setError(
-        err?.response?.data?.detail ||
-          err?.message ||
+        requestError?.response?.data?.detail ||
           "Unable to block the selected IP."
       );
     } finally {
@@ -436,34 +397,29 @@ export default function FirewallPage({ profile, onLogout }) {
     }
   }
 
-  /* ---------------------------------------------------------------------- */
-  /* UNBLOCK IP                                                              */
-  /* ---------------------------------------------------------------------- */
-
-  async function handleUnblockIp() {
-    if (!selectedIp) {
-      setError("Select an attacker IP first.");
+  async function unblockSelectedIp(ip = selectedIp) {
+    if (!ip) {
+      setError("Select an IP address first.");
       return;
     }
 
     try {
       setActionLoading(true);
-      setError("");
       setMessage("");
+      setError("");
 
-      await unblockIpApi(selectedIp);
+      await unblockIpApi(ip);
 
-      setBlockedIps((previous) =>
-        previous.filter((ip) => ip !== selectedIp)
+      setBlockedIps((current) =>
+        current.filter((value) => value !== ip)
       );
 
-      setMessage(`${selectedIp} has been submitted for firewall unblocking.`);
-    } catch (err) {
-      console.error("Unblock IP error:", err);
-
+      setMessage(
+        `${ip} was submitted for unblocking.`
+      );
+    } catch (requestError) {
       setError(
-        err?.response?.data?.detail ||
-          err?.message ||
+        requestError?.response?.data?.detail ||
           "Unable to unblock the selected IP."
       );
     } finally {
@@ -471,333 +427,176 @@ export default function FirewallPage({ profile, onLogout }) {
     }
   }
 
-  /* ---------------------------------------------------------------------- */
-  /* ATTACK SUMMARY                                                          */
-  /* ---------------------------------------------------------------------- */
-
-  const criticalCount = attacks.filter(
-    (attack) => getSeverity(attack) === "Critical"
-  ).length;
-
-  const highCount = attacks.filter(
-    (attack) => getSeverity(attack) === "High"
-  ).length;
-
-  const blockedCount = blockedIps.length;
-
-  const geoCount = Object.keys(geoLocations).length;
-
-  /* ---------------------------------------------------------------------- */
-  /* MAP MARKERS                                                             */
-  /* ---------------------------------------------------------------------- */
-
-  const geoMarkers = Object.entries(geoLocations);
-
   return (
-    <PageShell profile={profile} onLogout={onLogout}>
-      <div className="min-h-screen bg-[#020b1c] p-4 text-white md:p-6">
+    <PageShell
+      title="Firewall"
+      profile={profile}
+      onLogout={onLogout}
+    >
+      <div className="mx-auto max-w-[1600px] space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="text-2xl font-bold">
+              Firewall Operations
+            </h2>
 
-        {/* HEADER */}
-        <div className="mb-6">
-
-          <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-center">
-
-            <div>
-              <h1 className="text-2xl font-bold">
-                Firewall Operations
-              </h1>
-
-              <p className="mt-1 text-sm text-slate-400">
-                Windows firewall monitoring, threat intelligence and IP response
-              </p>
-            </div>
-
-            <div className="flex items-center gap-2 rounded-lg border border-green-500/20 bg-green-500/10 px-4 py-2 text-sm text-green-400">
-              <span className="h-2 w-2 animate-pulse rounded-full bg-green-400" />
-              Firewall Monitoring Active
-            </div>
-
+            <p className="text-sm text-slate-400">
+              Windows firewall monitoring, threat intelligence and IP response
+            </p>
           </div>
+
+          <span
+            className={`rounded-lg border px-3 py-2 text-xs ${
+              wsConnected
+                ? "border-green-500/30 bg-green-500/10 text-green-300"
+                : "border-yellow-500/30 bg-yellow-500/10 text-yellow-300"
+            }`}
+          >
+            ● {wsConnected ? "Live monitoring" : "Polling monitoring"}
+          </span>
         </div>
 
-        {/* MESSAGES */}
         {error && (
-          <div className="mb-4 rounded-lg border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-300">
+          <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-300">
             {error}
           </div>
         )}
 
         {message && (
-          <div className="mb-4 rounded-lg border border-green-500/30 bg-green-500/10 p-4 text-sm text-green-300">
+          <div className="rounded-lg border border-green-500/30 bg-green-500/10 p-3 text-sm text-green-300">
             {message}
           </div>
         )}
 
-        {/* KPI */}
-        <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-
-          <div className="rounded-xl border border-slate-800 bg-[#071426] p-5">
-            <p className="text-xs uppercase tracking-wider text-slate-500">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="rounded-xl border border-cyan-900/70 bg-[#071426] p-4">
+            <p className="text-xs uppercase text-slate-500">
               Security Events
             </p>
-
-            <p className="mt-2 text-3xl font-bold text-cyan-400">
-              {attacks.length.toLocaleString()}
+            <p className="mt-2 text-3xl font-bold text-cyan-300">
+              {attacks.length}
             </p>
           </div>
 
-          <div className="rounded-xl border border-slate-800 bg-[#071426] p-5">
-            <p className="text-xs uppercase tracking-wider text-slate-500">
+          <div className="rounded-xl border border-cyan-900/70 bg-[#071426] p-4">
+            <p className="text-xs uppercase text-slate-500">
               Critical Threats
             </p>
-
-            <p className="mt-2 text-3xl font-bold text-red-400">
-              {criticalCount.toLocaleString()}
+            <p className="mt-2 text-3xl font-bold text-red-300">
+              {criticalCount}
             </p>
           </div>
 
-          <div className="rounded-xl border border-slate-800 bg-[#071426] p-5">
-            <p className="text-xs uppercase tracking-wider text-slate-500">
+          <div className="rounded-xl border border-cyan-900/70 bg-[#071426] p-4">
+            <p className="text-xs uppercase text-slate-500">
               High Threats
             </p>
-
-            <p className="mt-2 text-3xl font-bold text-orange-400">
-              {highCount.toLocaleString()}
+            <p className="mt-2 text-3xl font-bold text-orange-300">
+              {highCount}
             </p>
           </div>
 
-          <div className="rounded-xl border border-slate-800 bg-[#071426] p-5">
-            <p className="text-xs uppercase tracking-wider text-slate-500">
+          <div className="rounded-xl border border-cyan-900/70 bg-[#071426] p-4">
+            <p className="text-xs uppercase text-slate-500">
               Blocked IPs
             </p>
-
-            <p className="mt-2 text-3xl font-bold text-green-400">
-              {blockedCount.toLocaleString()}
+            <p className="mt-2 text-3xl font-bold text-green-300">
+              {blockedIps.length}
             </p>
           </div>
-
         </div>
 
-        {/* TABS */}
-        <div className="mb-6 flex flex-wrap gap-2">
-
-          <button
-            type="button"
-            onClick={() => setActiveTab("overview")}
-            className={`rounded-lg px-4 py-2 text-sm font-medium ${
-              activeTab === "overview"
-                ? "bg-cyan-500 text-slate-950"
-                : "bg-slate-800 text-slate-300 hover:bg-slate-700"
-            }`}
-          >
-            Overview
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab("events")}
-            className={`rounded-lg px-4 py-2 text-sm font-medium ${
-              activeTab === "events"
-                ? "bg-cyan-500 text-slate-950"
-                : "bg-slate-800 text-slate-300 hover:bg-slate-700"
-            }`}
-          >
-            Attack Events
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab("blocked")}
-            className={`rounded-lg px-4 py-2 text-sm font-medium ${
-              activeTab === "blocked"
-                ? "bg-cyan-500 text-slate-950"
-                : "bg-slate-800 text-slate-300 hover:bg-slate-700"
-            }`}
-          >
-            Blocked IPs
-          </button>
-
+        <div className="flex flex-wrap gap-2">
+          {[
+            ["overview", "Overview"],
+            ["events", "Attack Events"],
+            ["blocked", "Blocked IPs"],
+          ].map(([key, label]) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setActiveTab(key)}
+              className={`rounded-lg px-4 py-2 text-sm font-semibold ${
+                activeTab === key
+                  ? "bg-cyan-500 text-slate-950"
+                  : "bg-slate-800 text-slate-300 hover:bg-slate-700"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
         </div>
 
-        {/* OVERVIEW */}
         {activeTab === "overview" && (
-          <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+            <Panel
+              title="Attacker Geolocation"
+              icon={<MapPin size={16} />}
+            >
+              <div className="relative min-h-[420px] overflow-hidden rounded-lg border border-cyan-900 bg-[#031326]">
+                <div className="absolute inset-0 bg-[linear-gradient(rgba(34,211,238,0.08)_1px,transparent_1px),linear-gradient(90deg,rgba(34,211,238,0.08)_1px,transparent_1px)] bg-[size:32px_32px]" />
 
-            {/* MAP */}
-            <Panel title="Attacker Geolocation">
+                <div className="absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center">
+                  <div className="h-4 w-4 animate-pulse rounded-full bg-cyan-300 shadow-[0_0_20px_#22d3ee]" />
+                  <span className="mt-1 text-[10px] text-cyan-300">
+                    SOC
+                  </span>
+                </div>
 
-              <div className="relative h-[450px] overflow-hidden rounded-lg bg-[#030914]">
+                {Object.entries(locations).map(([ip, location]) => (
+                  <div
+                    key={ip}
+                    className="absolute"
+                    style={{
+                      left: `${((location.longitude + 180) / 360) * 100}%`,
+                      top: `${((90 - location.latitude) / 180) * 100}%`,
+                    }}
+                  >
+                    <div className="h-3 w-3 animate-pulse rounded-full bg-red-400 shadow-[0_0_16px_#ef4444]" />
 
-                {geoLoading && (
-                  <div className="absolute left-4 top-4 z-10 rounded-lg border border-cyan-500/20 bg-slate-950/90 px-3 py-2 text-xs text-cyan-400">
-                    Loading geolocation...
+                    <span className="absolute left-4 top-0 whitespace-nowrap rounded bg-black/70 px-1 text-[9px] text-red-200">
+                      {ip}
+                    </span>
                   </div>
-                )}
+                ))}
 
-                {geoError && !geoLoading && (
-                  <div className="absolute left-4 top-4 z-10 rounded-lg border border-yellow-500/20 bg-slate-950/90 px-3 py-2 text-xs text-yellow-400">
-                    {geoError}
-                  </div>
-                )}
-
-                <ComposableMap
-                  projection="geoMercator"
-                  projectionConfig={{
-                    scale: 115,
-                    center: CENTER_COORDINATES,
-                  }}
-                  width={800}
-                  height={450}
-                  style={{
-                    width: "100%",
-                    height: "100%",
-                  }}
-                >
-
-                  <Geographies geography={geoUrl}>
-                    {({ geographies }) =>
-                      geographies.map((geo) => (
-                        <Geography
-                          key={geo.rsmKey}
-                          geography={geo}
-                          fill="#0f1b2d"
-                          stroke="#26364f"
-                          strokeWidth={0.5}
-                          style={{
-                            default: {
-                              outline: "none",
-                            },
-                            hover: {
-                              fill: "#16263d",
-                              outline: "none",
-                            },
-                            pressed: {
-                              outline: "none",
-                            },
-                          }}
-                        />
-                      ))
-                    }
-                  </Geographies>
-
-                  {/* USER / SOC LOCATION */}
-                  <Marker coordinates={CENTER_COORDINATES}>
-                    <circle
-                      r={4}
-                      fill="#22d3ee"
-                      stroke="#ffffff"
-                      strokeWidth={1}
-                    />
-
-                    <text
-                      textAnchor="middle"
-                      y={-10}
-                      style={{
-                        fill: "#67e8f9",
-                        fontSize: "10px",
-                        fontWeight: 600,
-                      }}
-                    >
-                      SOC
-                    </text>
-                  </Marker>
-
-                  {/* REAL GEOLOCATION MARKERS */}
-                  {geoMarkers.map(([ip, location]) => {
-
-                    const coordinates = location?.coordinates;
-
-                    if (
-                      !Array.isArray(coordinates) ||
-                      coordinates.length < 2
-                    ) {
-                      return null;
-                    }
-
-                    return (
-                      <g key={ip}>
-
-                        <Line
-                          from={coordinates}
-                          to={CENTER_COORDINATES}
-                          stroke="#ef4444"
-                          strokeWidth={1.2}
-                          strokeLinecap="round"
-                        />
-
-                        <Marker coordinates={coordinates}>
-
-                          <circle
-                            r={5}
-                            fill="#ef4444"
-                            stroke="#ffffff"
-                            strokeWidth={1}
-                          />
-
-                          <text
-                            textAnchor="middle"
-                            y={-9}
-                            style={{
-                              fill: "#fca5a5",
-                              fontSize: "9px",
-                              fontWeight: 600,
-                            }}
-                          >
-                            {ip}
-                          </text>
-
-                        </Marker>
-
-                      </g>
-                    );
-                  })}
-
-                </ComposableMap>
-
-                {geoMarkers.length === 0 && !geoLoading && (
-                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                    <div className="rounded-lg border border-slate-700 bg-slate-950/80 px-4 py-3 text-center">
+                {!Object.keys(locations).length && (
+                  <div className="absolute inset-0 grid place-items-center">
+                    <div className="rounded-lg border border-slate-700 bg-[#020b1c]/90 p-4 text-center">
                       <p className="text-sm text-slate-300">
-                        No attacker locations available
-                      </p>
-
-                      <p className="mt-1 text-xs text-slate-500">
-                        The backend did not return usable coordinates.
+                        {loading
+                          ? "Loading attacker locations..."
+                          : "No geolocation data available"}
                       </p>
                     </div>
                   </div>
                 )}
-
               </div>
 
-              <div className="mt-4 flex justify-between text-xs text-slate-500">
+              <div className="mt-3 flex justify-between text-xs text-slate-500">
                 <span>
-                  Geolocated attackers: {geoCount}
+                  Geolocated attackers:{" "}
+                  {Object.keys(locations).length}
                 </span>
 
-                <span>
-                  Location source: SOC backend
-                </span>
+                <span>Backend location service</span>
               </div>
-
             </Panel>
 
-            {/* RESPONSE PANEL */}
-            <Panel title="Firewall Response">
-
-              <div className="space-y-5">
-
-                <div>
-                  <label className="mb-2 block text-sm text-slate-400">
-                    Attacker IP
-                  </label>
+            <Panel
+              title="Firewall Response"
+              icon={<Shield size={16} />}
+            >
+              <div className="space-y-4">
+                <label className="block text-sm text-slate-400">
+                  Attacker IP
 
                   <select
                     value={selectedIp}
                     onChange={(event) =>
-                      handleSelectIp(event.target.value)
+                      selectIp(event.target.value)
                     }
-                    className="w-full rounded-lg border border-slate-700 bg-slate-900 px-4 py-3 text-sm text-white outline-none focus:border-cyan-500"
+                    className="mt-1 w-full rounded-lg border border-cyan-900 bg-[#041326] px-3 py-3 text-sm"
                   >
                     <option value="">
                       Select attacker IP
@@ -809,235 +608,177 @@ export default function FirewallPage({ profile, onLogout }) {
                       </option>
                     ))}
                   </select>
-                </div>
-
-                {selectedIp && (
-                  <div className="rounded-lg border border-slate-800 bg-slate-900/60 p-4">
-
-                    <p className="text-xs uppercase tracking-wider text-slate-500">
-                      Selected IP
-                    </p>
-
-                    <p className="mt-1 font-mono text-lg text-cyan-400">
-                      {selectedIp}
-                    </p>
-
-                    {geoLocations[selectedIp] && (
-                      <p className="mt-2 text-sm text-slate-400">
-                        Location:{" "}
-                        {geoLocations[selectedIp].name}
-                      </p>
-                    )}
-
-                  </div>
-                )}
+                </label>
 
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-
                   <button
                     type="button"
+                    onClick={blockSelectedIp}
                     disabled={!selectedIp || actionLoading}
-                    onClick={handleBlockIp}
-                    className="rounded-lg bg-red-600 px-4 py-3 text-sm font-semibold text-white hover:bg-red-500 disabled:cursor-not-allowed disabled:opacity-40"
+                    className="flex items-center justify-center gap-2 rounded-lg bg-red-600 px-4 py-3 text-sm font-semibold hover:bg-red-500 disabled:opacity-40"
                   >
-                    {actionLoading
-                      ? "Processing..."
-                      : "Block IP"}
+                    <Ban size={16} />
+                    {actionLoading ? "Processing..." : "Block IP"}
                   </button>
 
                   <button
                     type="button"
+                    onClick={() => unblockSelectedIp()}
                     disabled={!selectedIp || actionLoading}
-                    onClick={handleUnblockIp}
-                    className="rounded-lg bg-green-600 px-4 py-3 text-sm font-semibold text-white hover:bg-green-500 disabled:cursor-not-allowed disabled:opacity-40"
+                    className="flex items-center justify-center gap-2 rounded-lg bg-green-600 px-4 py-3 text-sm font-semibold hover:bg-green-500 disabled:opacity-40"
                   >
-                    {actionLoading
-                      ? "Processing..."
-                      : "Unblock IP"}
+                    <Unlock size={16} />
+                    {actionLoading ? "Processing..." : "Unblock IP"}
                   </button>
-
                 </div>
 
-                {threatIntel && (
-                  <div className="rounded-lg border border-purple-500/20 bg-purple-500/5 p-4">
-
-                    <h3 className="text-sm font-semibold text-purple-300">
+                {selectedIntel && (
+                  <div className="rounded-lg border border-purple-500/30 bg-purple-500/10 p-4">
+                    <p className="text-sm font-semibold text-purple-300">
                       Threat Intelligence
-                    </h3>
+                    </p>
 
-                    <pre className="mt-3 max-h-60 overflow-auto whitespace-pre-wrap break-words text-xs text-slate-400">
-                      {JSON.stringify(
-                        threatIntel,
-                        null,
-                        2
-                      )}
-                    </pre>
+                    <div className="mt-3 space-y-2 text-sm">
+                      <p>
+                        Reputation:{" "}
+                        <span className="text-orange-300">
+                          {selectedIntel.reputation_score ?? "--"}
+                        </span>
+                      </p>
 
+                      <p>
+                        Country:{" "}
+                        <span className="text-cyan-300">
+                          {selectedIntel.country || "Unknown"}
+                        </span>
+                      </p>
+
+                      <p>
+                        Malicious:{" "}
+                        <span
+                          className={
+                            selectedIntel.malicious
+                              ? "text-red-300"
+                              : "text-green-300"
+                          }
+                        >
+                          {selectedIntel.malicious
+                            ? "Yes"
+                            : "No"}
+                        </span>
+                      </p>
+                    </div>
                   </div>
                 )}
 
-                <div className="rounded-lg border border-slate-800 bg-slate-900/40 p-4">
+                <div className="rounded-lg border border-cyan-900 bg-[#041326] p-4">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle
+                      size={17}
+                      className="text-green-300"
+                    />
 
-                  <p className="text-xs uppercase tracking-wider text-slate-500">
-                    Firewall Provider
+                    <span className="text-sm font-semibold">
+                      Windows Defender Firewall
+                    </span>
+                  </div>
+
+                  <p className="mt-2 text-xs text-slate-500">
+                    Firewall actions are executed through the authenticated SOC
+                    backend.
                   </p>
-
-                  <p className="mt-2 text-sm font-medium text-slate-200">
-                    Windows Defender Firewall
-                  </p>
-
-                  <p className="mt-1 text-xs text-slate-500">
-                    Firewall actions are executed through the SOC backend.
-                  </p>
-
                 </div>
-
               </div>
-
             </Panel>
-
           </div>
         )}
 
-        {/* ATTACK EVENTS */}
         {activeTab === "events" && (
-          <Panel title="Attack Events">
-
+          <Panel
+            title="Attack Events"
+            icon={<Activity size={16} />}
+          >
             <div className="overflow-x-auto">
-
-              <table className="w-full min-w-[900px] text-left">
-
-                <thead>
-                  <tr className="border-b border-slate-800 text-xs uppercase tracking-wider text-slate-500">
-
-                    <th className="px-4 py-3">
-                      IP Address
-                    </th>
-
-                    <th className="px-4 py-3">
-                      Attack Type
-                    </th>
-
-                    <th className="px-4 py-3">
-                      Severity
-                    </th>
-
-                    <th className="px-4 py-3">
-                      Location
-                    </th>
-
-                    <th className="px-4 py-3">
-                      Action
-                    </th>
-
+              <table className="min-w-[900px] w-full text-left text-xs">
+                <thead className="border-b border-cyan-900/70 text-slate-500">
+                  <tr>
+                    <th className="px-3 py-3">IP Address</th>
+                    <th className="px-3 py-3">Attack Type</th>
+                    <th className="px-3 py-3">Severity</th>
+                    <th className="px-3 py-3">Action</th>
+                    <th className="px-3 py-3">Status</th>
                   </tr>
                 </thead>
 
                 <tbody>
+                  {attacks.map((attack, index) => {
+                    const severity = getSeverity(attack);
 
-                  {loading ? (
-                    <tr>
-                      <td
-                        colSpan="5"
-                        className="px-4 py-10 text-center text-sm text-slate-500"
+                    return (
+                      <tr
+                        key={`${attackKey(attack)}-${index}`}
+                        className="border-b border-cyan-950 hover:bg-cyan-950/40"
                       >
-                        Loading attack events...
-                      </td>
-                    </tr>
-                  ) : attacks.length === 0 ? (
+                        <td className="px-3 py-3 font-mono text-cyan-300">
+                          {getIp(attack)}
+                        </td>
+
+                        <td className="px-3 py-3 text-slate-200">
+                          {getAttackType(attack)}
+                        </td>
+
+                        <td className="px-3 py-3">
+                          <span
+                            className={`rounded-full border px-2 py-1 text-[10px] capitalize ${severityClass(
+                              severity
+                            )}`}
+                          >
+                            {severity}
+                          </span>
+                        </td>
+
+                        <td className="px-3 py-3 text-slate-300">
+                          {getAction(attack)}
+                        </td>
+
+                        <td className="px-3 py-3 text-slate-400">
+                          {attack?.status || "Detected"}
+                        </td>
+                      </tr>
+                    );
+                  })}
+
+                  {!attacks.length && (
                     <tr>
                       <td
-                        colSpan="5"
-                        className="px-4 py-10 text-center text-sm text-slate-500"
+                        colSpan={5}
+                        className="px-3 py-10 text-center text-slate-500"
                       >
                         No attack events available.
                       </td>
                     </tr>
-                  ) : (
-                    attacks.slice(0, 100).map((attack, index) => {
-
-                      const ip = getIp(attack);
-                      const severity = getSeverity(attack);
-
-                      return (
-                        <tr
-                          key={
-                            attack?.id ||
-                            attack?._id ||
-                            attack?.event_id ||
-                            `${ip}-${index}`
-                          }
-                          className="border-b border-slate-900 hover:bg-slate-900/40"
-                        >
-
-                          <td className="px-4 py-4 font-mono text-sm text-cyan-400">
-                            {ip || "Unknown"}
-                          </td>
-
-                          <td className="px-4 py-4 text-sm text-slate-200">
-                            {getAttackType(attack)}
-                          </td>
-
-                          <td className="px-4 py-4">
-
-                            <span
-                              className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${severityClasses(
-                                severity
-                              )}`}
-                            >
-                              {severity}
-                            </span>
-
-                          </td>
-
-                          <td className="px-4 py-4 text-sm text-slate-400">
-                            {geoLocations[ip]?.name ||
-                              "Location unavailable"}
-                          </td>
-
-                          <td className="px-4 py-4 text-sm text-slate-300">
-                            {String(
-                              attack?.action_taken ||
-                                attack?.action ||
-                                "Detected"
-                            )}
-                          </td>
-
-                        </tr>
-                      );
-                    })
                   )}
-
                 </tbody>
-
               </table>
-
             </div>
-
           </Panel>
         )}
 
-        {/* BLOCKED IPS */}
         {activeTab === "blocked" && (
           <Panel title="Blocked IP Addresses">
-
-            {blockedIps.length === 0 ? (
-              <div className="rounded-lg border border-slate-800 bg-slate-900/30 p-10 text-center">
-                <p className="text-sm text-slate-400">
-                  No IP addresses have been blocked during this session.
-                </p>
+            {!blockedIps.length ? (
+              <div className="rounded-lg border border-cyan-900 bg-[#041326] p-10 text-center text-sm text-slate-500">
+                No blocked IP addresses are currently recorded.
               </div>
             ) : (
               <div className="space-y-3">
-
                 {blockedIps.map((ip) => (
                   <div
                     key={ip}
-                    className="flex flex-col justify-between gap-3 rounded-lg border border-slate-800 bg-slate-900/40 p-4 sm:flex-row sm:items-center"
+                    className="flex flex-col justify-between gap-3 rounded-lg border border-cyan-900 bg-[#041326] p-4 sm:flex-row sm:items-center"
                   >
-
                     <div>
-                      <p className="font-mono text-sm text-cyan-400">
+                      <p className="font-mono text-cyan-300">
                         {ip}
                       </p>
 
@@ -1048,38 +789,55 @@ export default function FirewallPage({ profile, onLogout }) {
 
                     <button
                       type="button"
-                      onClick={() => {
-                        setSelectedIp(ip);
-                        handleUnblockIp();
-                      }}
+                      onClick={() => unblockSelectedIp(ip)}
                       disabled={actionLoading}
-                      className="rounded-lg bg-green-600 px-4 py-2 text-xs font-semibold text-white hover:bg-green-500 disabled:opacity-40"
+                      className="rounded-lg bg-green-600 px-4 py-2 text-xs font-semibold hover:bg-green-500 disabled:opacity-50"
                     >
                       Unblock
                     </button>
-
                   </div>
                 ))}
-
               </div>
             )}
-
           </Panel>
         )}
 
-        {/* FOOTER */}
-        <div className="mt-5 flex flex-col justify-between gap-2 text-xs text-slate-600 sm:flex-row">
+        <Panel title="Live Firewall Actions">
+          {firewallEvents.length === 0 ? (
+            <p className="text-sm text-slate-500">
+              Waiting for firewall actions...
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {firewallEvents.map((event, index) => (
+                <div
+                  key={`${event.ip_address}-${event.received_at}-${index}`}
+                  className="flex items-center justify-between gap-3 rounded-lg border border-cyan-900 bg-[#041326] p-3"
+                >
+                  <div>
+                    <p className="font-mono text-sm text-cyan-300">
+                      {event.ip_address}
+                    </p>
 
-          <span>
-            {attacks.length.toLocaleString()} security events loaded
-          </span>
+                    <p className="text-xs text-slate-500">
+                      {event.reason || "SOC analyst action"}
+                    </p>
+                  </div>
 
-          <span>
-            Geolocation data: backend supplied only
-          </span>
-
-        </div>
-
+                  <span
+                    className={
+                      event.action === "block"
+                        ? "text-xs text-red-300"
+                        : "text-xs text-green-300"
+                    }
+                  >
+                    {event.action}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </Panel>
       </div>
     </PageShell>
   );
